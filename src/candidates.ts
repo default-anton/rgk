@@ -40,8 +40,12 @@ export function parseRgJson(stdout: string): readonly Candidate[] {
   return candidates;
 }
 
-export function parseRgJsonLine(line: string, nextId: number): readonly Candidate[] {
-  if (line.length === 0) {
+export function parseRgJsonLine(
+  line: string,
+  nextId: number,
+  maxCandidates = Number.POSITIVE_INFINITY,
+): readonly Candidate[] {
+  if (line.length === 0 || maxCandidates <= 0) {
     return [];
   }
 
@@ -67,8 +71,13 @@ export function parseRgJsonLine(line: string, nextId: number): readonly Candidat
   const matches =
     submatches === undefined || submatches.length === 0 ? [{ start: 0, end: 0 }] : submatches;
   const body = normalizeLineText(matchedLine.text);
+  const candidates: Candidate[] = [];
 
-  return matches.map((match, index) => {
+  for (const match of matches) {
+    if (candidates.length >= maxCandidates) {
+      break;
+    }
+
     const matchStartBytes = match.start ?? 0;
     const matchEndBytes = match.end ?? matchStartBytes;
     const matchStart = matchedLine.stringIndexForByteOffset(matchStartBytes);
@@ -80,10 +89,12 @@ export function parseRgJsonLine(line: string, nextId: number): readonly Candidat
       matchStart,
       matchEnd,
     )}`;
-    const id = `m${(nextId + index).toString(36)}`;
+    const id = `m${(nextId + candidates.length).toString(36)}`;
 
-    return { id, output, promptLine: `${id} ${promptOutput}` };
-  });
+    candidates.push({ id, output, promptLine: `${id} ${promptOutput}` });
+  }
+
+  return candidates;
 }
 
 export function orderCandidates(

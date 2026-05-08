@@ -111,7 +111,8 @@ export function runRgCandidates(
       while (newlineIndex !== -1) {
         const line = pending.slice(0, newlineIndex);
         pending = pending.slice(newlineIndex + 1);
-        const lineCandidates = parseRgJsonLine(line, nextId);
+        const remainingCandidates = keepLimit + 1 - candidates.length;
+        const lineCandidates = parseRgJsonLine(line, nextId, remainingCandidates);
         if (lineCandidates.length > 0) {
           candidates.push(...lineCandidates);
           nextId += lineCandidates.length;
@@ -130,7 +131,8 @@ export function runRgCandidates(
     child.on("error", reject);
     child.on("close", (code, signal) => {
       if (!limitExceeded && pending !== "") {
-        const lineCandidates = parseRgJsonLine(pending, nextId);
+        const remainingCandidates = keepLimit + 1 - candidates.length;
+        const lineCandidates = parseRgJsonLine(pending, nextId, remainingCandidates);
         if (lineCandidates.length > 0) {
           candidates.push(...lineCandidates);
           limitExceeded = candidates.length > keepLimit;

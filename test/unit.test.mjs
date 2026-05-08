@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseArgs, UsageError } from "../dist/args.js";
-import { orderCandidates, parseRgJson } from "../dist/candidates.js";
+import { orderCandidates, parseRgJson, parseRgJsonLine } from "../dist/candidates.js";
 import { withKeepRgFlags } from "../dist/cli.js";
 import { buildPrompt } from "../dist/codex.js";
 import { loadRgPath } from "../dist/config.js";
@@ -92,6 +92,35 @@ test("parseRgJson creates a candidate for each same-line match", () => {
       id: "m2",
       output: "src/app.ts:7:5:foo foo",
       promptLine: "m2 src/app.ts:7:5:foo foo",
+    },
+  ]);
+});
+
+test("parseRgJsonLine caps same-line submatches before materializing every candidate", () => {
+  const line = JSON.stringify({
+    type: "match",
+    data: {
+      path: { text: "src/app.ts" },
+      lines: { text: "foo foo foo\n" },
+      line_number: 7,
+      submatches: [
+        { start: 0, end: 3 },
+        { start: 4, end: 7 },
+        { start: 8, end: 11 },
+      ],
+    },
+  });
+
+  assert.deepEqual(parseRgJsonLine(line, 10, 2), [
+    {
+      id: "ma",
+      output: "src/app.ts:7:1:foo foo foo",
+      promptLine: "ma src/app.ts:7:1:foo foo foo",
+    },
+    {
+      id: "mb",
+      output: "src/app.ts:7:5:foo foo foo",
+      promptLine: "mb src/app.ts:7:5:foo foo foo",
     },
   ]);
 });

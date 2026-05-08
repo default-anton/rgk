@@ -15,6 +15,7 @@ test("keep mode filters piped stdin", async () => {
     `#!/usr/bin/env node
 const outputIndex = process.argv.indexOf("--output-last-message");
 if (outputIndex === -1) process.exit(2);
+if (!process.argv.includes("--ignore-rules") || !process.argv.includes("--ignore-user-config")) process.exit(2);
 await new Promise((resolve) => process.stdin.resume().on("end", resolve));
 await import("node:fs/promises").then(({ writeFile }) => writeFile(process.argv[outputIndex + 1], JSON.stringify({ ranked_ids: "m1" })));
 console.log(JSON.stringify({ ranked_ids: "m1" }));

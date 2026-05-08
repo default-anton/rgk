@@ -59,6 +59,8 @@ export async function rankCandidates(
         `model_reasoning_effort=${config.reasoningEffort}`,
         "--ephemeral",
         "--skip-git-repo-check",
+        "--ignore-rules",
+        "--ignore-user-config",
         "--sandbox",
         "read-only",
         "--output-schema",
