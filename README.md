@@ -13,7 +13,7 @@ Without `--keep`, `rgk` execs `rg` directly. `--help`, `-h`, and `--version` sho
 ## Installation
 
 ```bash
-pnpm install -g @default-anton/rgk
+pnpm install -g @akuzmenko/rgk
 ```
 
 Requirements:

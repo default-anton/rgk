@@ -1,5 +1,5 @@
 {
-  "name": "@default-anton/rgk",
+  "name": "@akuzmenko/rgk",
   "version": "0.1.0",
   "description": "ripgrep with an LLM-powered --keep post-filter",
   "keywords": [
