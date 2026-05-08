@@ -32,20 +32,21 @@ type CodexResponse = {
   readonly ranked_ids?: unknown;
 };
 
+type CodexInputFiles = {
+  readonly schemaPath: string;
+  readonly instructionsPath: string;
+};
+
 export async function rankCandidates(
   condition: string,
   candidates: readonly Candidate[],
   config: Config,
 ): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "rgk-"));
-  const schemaPath = join(directory, "schema.json");
-  const instructionsPath = join(directory, "system.md");
   const outputPath = join(directory, "out.json");
 
   try {
-    await writeFile(schemaPath, `${JSON.stringify(schema)}\n`, "utf8");
-    await writeFile(instructionsPath, instructions, "utf8");
-
+    const { schemaPath, instructionsPath } = await materializeCodexInputFiles(directory);
     const prompt = buildPrompt(condition, candidates, config.promptMaxBytes);
     const result = await runCaptured(
       config.codexPath,
@@ -91,6 +92,18 @@ export async function rankCandidates(
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+async function materializeCodexInputFiles(directory: string): Promise<CodexInputFiles> {
+  const schemaPath = join(directory, "schema.json");
+  const instructionsPath = join(directory, "system.md");
+
+  await Promise.all([
+    writeFile(schemaPath, `${JSON.stringify(schema)}\n`, "utf8"),
+    writeFile(instructionsPath, instructions, "utf8"),
+  ]);
+
+  return { schemaPath, instructionsPath };
 }
 
 export function buildPrompt(
