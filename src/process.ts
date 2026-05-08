@@ -68,6 +68,15 @@ export function runCaptured(
         return;
       }
 
+      stdinStream.on("error", (error: NodeJS.ErrnoException) => {
+        if (error.code === "EPIPE") {
+          return;
+        }
+
+        settled = true;
+        clearProcessTimeout(timeout);
+        reject(error);
+      });
       stdinStream.end(options.input);
     }
   });

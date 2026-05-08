@@ -64,6 +64,22 @@ await import("node:fs/promises").then(({ writeFile }) => writeFile(process.argv[
   assert.equal(child.exitCode, 0);
 });
 
+test("keep mode handles codex exiting before reading prompt", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "rgk-test-"));
+  const fakeCodex = join(directory, "codex.mjs");
+  await writeFile(fakeCodex, "#!/usr/bin/env node\nprocess.exit(2);\n", "utf8");
+  await chmod(fakeCodex, 0o755);
+
+  const result = await runCli(["foo", "--keep", "contains foo"], {
+    input: `${"foo x".padEnd(1_000, "x")}\n`.repeat(300),
+    env: { RGK_CODEX_PATH: fakeCodex, RGK_PROMPT_MAX_BYTES: "1000000" },
+  });
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /rgk: keep filter failed:/u);
+  assert.doesNotMatch(result.stderr, /Unhandled 'error' event|write EPIPE/u);
+});
+
 test("keep mode stops rg after candidate limit", async () => {
   const directory = await mkdtemp(join(tmpdir(), "rgk-test-"));
   const fakeRg = join(directory, "rg.mjs");
