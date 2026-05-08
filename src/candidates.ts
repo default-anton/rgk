@@ -22,55 +22,58 @@ export function parseRgJson(stdout: string): readonly Candidate[] {
   let nextId = 1;
 
   for (const line of stdout.split("\n")) {
-    const candidate = parseRgJsonLine(line, nextId);
-    if (candidate === null) {
-      continue;
-    }
-
-    candidates.push(candidate);
-    nextId += 1;
+    const lineCandidates = parseRgJsonLine(line, nextId);
+    candidates.push(...lineCandidates);
+    nextId += lineCandidates.length;
   }
 
   return candidates;
 }
 
-export function parseRgJsonLine(line: string, nextId: number): Candidate | null {
+export function parseRgJsonLine(line: string, nextId: number): readonly Candidate[] {
   if (line.length === 0) {
-    return null;
+    return [];
   }
 
   let event: RgJsonEvent;
   try {
     event = JSON.parse(line) as RgJsonEvent;
   } catch {
-    return null;
+    return [];
   }
 
   if (event.type !== "match") {
-    return null;
+    return [];
   }
 
   const path = event.data?.path?.text;
   const text = event.data?.lines?.text;
   const lineNumber = event.data?.line_number;
   if (path === undefined || text === undefined || lineNumber === undefined) {
-    return null;
+    return [];
   }
 
-  const firstMatch = event.data?.submatches?.[0];
-  const matchStart = firstMatch?.start ?? 0;
-  const matchEnd = firstMatch?.end ?? matchStart;
-  const column = matchStart + 1;
+  const submatches = event.data?.submatches;
+  const matches =
+    submatches === undefined || submatches.length === 0 ? [{ start: 0, end: 0 }] : submatches;
   const body = normalizeLineText(text);
-  const output = `${path}:${lineNumber}:${column}:${body}`;
-  const promptOutput = `${path}:${lineNumber}:${column}:${summarizeForPrompt(
-    body,
-    matchStart,
-    matchEnd,
-  )}`;
-  const id = `m${nextId.toString(36)}`;
 
-  return { id, output, promptLine: `${id} ${promptOutput}` };
+  return matches.map((match, index) => {
+    const matchStartBytes = match.start ?? 0;
+    const matchEndBytes = match.end ?? matchStartBytes;
+    const matchStart = byteOffsetToStringIndex(body, matchStartBytes);
+    const matchEnd = byteOffsetToStringIndex(body, Math.max(matchEndBytes, matchStartBytes));
+    const column = matchStartBytes + 1;
+    const output = `${path}:${lineNumber}:${column}:${body}`;
+    const promptOutput = `${path}:${lineNumber}:${column}:${summarizeForPrompt(
+      body,
+      matchStart,
+      matchEnd,
+    )}`;
+    const id = `m${(nextId + index).toString(36)}`;
+
+    return { id, output, promptLine: `${id} ${promptOutput}` };
+  });
 }
 
 export function orderCandidates(
@@ -177,6 +180,29 @@ function truncateEndByBytes(value: string, maxBytes: number): string {
 
 function byteLength(value: string): number {
   return Buffer.byteLength(value, "utf8");
+}
+
+function byteOffsetToStringIndex(value: string, byteOffset: number): number {
+  if (byteOffset <= 0) {
+    return 0;
+  }
+
+  let bytesSeen = 0;
+  let stringIndex = 0;
+  for (const char of value) {
+    const nextBytesSeen = bytesSeen + byteLength(char);
+    if (nextBytesSeen > byteOffset) {
+      return stringIndex;
+    }
+
+    bytesSeen = nextBytesSeen;
+    stringIndex += char.length;
+    if (bytesSeen === byteOffset) {
+      return stringIndex;
+    }
+  }
+
+  return value.length;
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs, UsageError } from "./args.js";
 import { orderCandidates } from "./candidates.js";
 import { rankCandidates } from "./codex.js";
@@ -11,7 +14,7 @@ import {
   runRgCandidates,
 } from "./process.js";
 
-const version = "0.1.0";
+const version = readPackageVersion();
 let pipeHandlersInstalled = false;
 
 export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Promise<number> {
@@ -206,6 +209,16 @@ function isEpipe(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "EPIPE";
 }
 
+function readPackageVersion(): string {
+  const packageJsonPath = join(dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8")) as { version?: unknown };
+  if (typeof packageJson.version !== "string") {
+    throw new Error("package.json does not contain a version string");
+  }
+
+  return packageJson.version;
+}
+
 const helpText = `rgk ${version}
 
 Usage:
@@ -227,14 +240,3 @@ Environment:
 
 Use rg --help for ripgrep options. Use --rgk-help or --rgk-version for wrapper-only output.
 `;
-
-if (import.meta.url === `file://${process.argv[1]}`) {
-  try {
-    const code = await main(process.argv.slice(2), process.env);
-    process.exitCode = code;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    writeStderr(`rgk: unexpected failure: ${message}\n`);
-    process.exitCode = 2;
-  }
-}

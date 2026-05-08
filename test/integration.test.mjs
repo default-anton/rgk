@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { spawn } from "node:child_process";
 
-const cliPath = new URL("../dist/cli.js", import.meta.url).pathname;
+const cliPath = new URL("../dist/bin.js", import.meta.url).pathname;
 
 test("keep mode filters piped stdin", async () => {
   const directory = await mkdtemp(join(tmpdir(), "rgk-test-"));
@@ -52,8 +52,13 @@ await import("node:fs/promises").then(({ writeFile }) => writeFile(process.argv[
     env: { ...process.env, RGK_CODEX_PATH: fakeCodex },
     stdio: ["pipe", "pipe", "pipe"],
   });
+  head.stdin.on("error", (error) => {
+    if (error.code !== "EPIPE") {
+      throw error;
+    }
+  });
   child.stdout.pipe(head.stdin);
-  child.stdin.end(`${"foo\\n".repeat(300)}`);
+  child.stdin.end("foo\n".repeat(300));
   await Promise.all([waitForClose(head), waitForClose(child)]);
 
   assert.equal(child.exitCode, 0);

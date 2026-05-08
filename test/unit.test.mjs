@@ -68,6 +68,34 @@ test("orderCandidates follows ranked_ids, ignores unknown IDs, and dedupes", () 
   assert.deepEqual(orderCandidates(candidates, "m2 missing m2 m1"), [candidates[1], candidates[0]]);
 });
 
+test("parseRgJson creates a candidate for each same-line match", () => {
+  const stdout = `${JSON.stringify({
+    type: "match",
+    data: {
+      path: { text: "src/app.ts" },
+      lines: { text: "foo foo\n" },
+      line_number: 7,
+      submatches: [
+        { start: 0, end: 3 },
+        { start: 4, end: 7 },
+      ],
+    },
+  })}\n`;
+
+  assert.deepEqual(parseRgJson(stdout), [
+    {
+      id: "m1",
+      output: "src/app.ts:7:1:foo foo",
+      promptLine: "m1 src/app.ts:7:1:foo foo",
+    },
+    {
+      id: "m2",
+      output: "src/app.ts:7:5:foo foo",
+      promptLine: "m2 src/app.ts:7:5:foo foo",
+    },
+  ]);
+});
+
 test("parseRgJson truncates long prompt lines around the match", () => {
   const text = `${"a".repeat(5_000)}needle${"z".repeat(5_000)}\n`;
   const stdout = `${JSON.stringify({
@@ -84,6 +112,24 @@ test("parseRgJson truncates long prompt lines around the match", () => {
   assert.equal(candidate.output.includes("needle"), true);
   assert.equal(candidate.promptLine.includes("needle"), true);
   assert.equal(Buffer.byteLength(candidate.promptLine, "utf8") < 2_100, true);
+});
+
+test("parseRgJson maps ripgrep byte offsets before summarizing unicode lines", () => {
+  const prefix = "é".repeat(5_000);
+  const text = `${prefix}needle${"z".repeat(5_000)}\n`;
+  const start = Buffer.byteLength(prefix, "utf8");
+  const stdout = `${JSON.stringify({
+    type: "match",
+    data: {
+      path: { text: "src/app.ts" },
+      lines: { text },
+      line_number: 7,
+      submatches: [{ start, end: start + 6 }],
+    },
+  })}\n`;
+
+  const [candidate] = parseRgJson(stdout);
+  assert.equal(candidate.promptLine.includes("needle"), true);
 });
 
 test("buildPrompt keeps condition and compact candidates", () => {

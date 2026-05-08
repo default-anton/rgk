@@ -20,7 +20,7 @@
     "url": "git+https://github.com/default-anton/rgk.git"
   },
   "bin": {
-    "rgk": "./dist/cli.js"
+    "rgk": "./dist/bin.js"
   },
   "files": [
     "dist",
@@ -28,6 +28,9 @@
     "LICENSE"
   ],
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "check": "tsc --noEmit",

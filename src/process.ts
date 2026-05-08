@@ -102,10 +102,10 @@ export function runRgCandidates(
       while (newlineIndex !== -1) {
         const line = pending.slice(0, newlineIndex);
         pending = pending.slice(newlineIndex + 1);
-        const candidate = parseRgJsonLine(line, nextId);
-        if (candidate !== null) {
-          candidates.push(candidate);
-          nextId += 1;
+        const lineCandidates = parseRgJsonLine(line, nextId);
+        if (lineCandidates.length > 0) {
+          candidates.push(...lineCandidates);
+          nextId += lineCandidates.length;
           if (candidates.length > keepLimit) {
             limitExceeded = true;
             child.kill("SIGTERM");
@@ -121,9 +121,9 @@ export function runRgCandidates(
     child.on("error", reject);
     child.on("close", (code, signal) => {
       if (!limitExceeded && pending !== "") {
-        const candidate = parseRgJsonLine(pending, nextId);
-        if (candidate !== null) {
-          candidates.push(candidate);
+        const lineCandidates = parseRgJsonLine(pending, nextId);
+        if (lineCandidates.length > 0) {
+          candidates.push(...lineCandidates);
           limitExceeded = candidates.length > keepLimit;
         }
       }
