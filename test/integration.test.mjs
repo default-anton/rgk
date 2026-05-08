@@ -78,7 +78,7 @@ await import("node:fs/promises").then(({ writeFile }) => writeFile(process.argv[
     stdio: ["pipe", "pipe", "pipe"],
   });
   head.stdin.on("error", (error) => {
-    if (error.code !== "EPIPE") {
+    if (!isClosedPipeError(error)) {
       throw error;
     }
   });
@@ -167,6 +167,10 @@ function waitForClose(child) {
     child.on("error", reject);
     child.on("close", resolve);
   });
+}
+
+function isClosedPipeError(error) {
+  return error.code === "EPIPE" || error.code === "ENOTCONN";
 }
 
 function runCli(args, options = {}) {

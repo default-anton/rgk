@@ -113,7 +113,7 @@ async function materializeCodexInputFiles(directory: string): Promise<CodexInput
 export function buildPrompt(
   condition: string,
   candidates: readonly Candidate[],
-  maxBytes = 180_000,
+  maxBytes = 400_000,
 ): string {
   const prompt = `Condition:\n${condition}\n\nCandidates:\n${candidates.map((candidate) => candidate.promptLine).join("\n")}\n`;
   const bytes = Buffer.byteLength(prompt, "utf8");

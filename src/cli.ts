@@ -280,7 +280,7 @@ function installPipeHandlers(): void {
 }
 
 function handlePipeError(error: NodeJS.ErrnoException): void {
-  if (error.code === "EPIPE") {
+  if (isClosedPipeError(error)) {
     process.exit(0);
   }
 
@@ -299,7 +299,7 @@ function writeStream(stream: NodeJS.WriteStream, text: string): void {
   try {
     stream.write(text);
   } catch (error) {
-    if (isEpipe(error)) {
+    if (isClosedPipeError(error)) {
       process.exit(0);
     }
 
@@ -307,8 +307,12 @@ function writeStream(stream: NodeJS.WriteStream, text: string): void {
   }
 }
 
-function isEpipe(error: unknown): boolean {
-  return error instanceof Error && "code" in error && error.code === "EPIPE";
+function isClosedPipeError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error.code === "EPIPE" || error.code === "ENOTCONN")
+  );
 }
 
 function readPackageVersion(): string {
@@ -337,7 +341,7 @@ Environment:
   RGK_MODEL                   Codex model (default: gpt-5.3-codex-spark)
   RGK_REASONING_EFFORT        Codex reasoning effort (default: low)
   RGK_KEEP_LIMIT              Max candidates sent to Codex (default: 300)
-  RGK_PROMPT_MAX_BYTES        Max prompt bytes sent to Codex (default: 180000)
+  RGK_PROMPT_MAX_BYTES        Max prompt bytes sent to Codex (default: 400000)
   RGK_PROMPT_LINE_MAX_BYTES   Max matched-line bytes sent per candidate (default: 600, min: 4)
   RGK_OUTPUT_LINE_MAX_BYTES   Max matched-line bytes printed per result (default: 300, min: 4)
   RGK_DEBUG                   Print Codex diagnostics when set to 1 or true
