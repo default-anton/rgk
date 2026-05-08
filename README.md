@@ -8,12 +8,12 @@ rgk PATTERN --keep "natural language condition"
 
 `rg` still does the fast lexical search. `--keep` sends the matching lines to Codex, keeps only results that satisfy the condition, and prints kept results ranked strongest first.
 
-Without `--keep`, `rgk` execs `rg` directly.
+Without `--keep`, `rgk` execs `rg` directly. `--help`, `-h`, and `--version` show normal `rg` output with a short `rgk` section appended.
 
 ## Installation
 
 ```bash
-pnpm install -g rgk
+pnpm install -g @default-anton/rgk
 ```
 
 Requirements:
@@ -48,6 +48,7 @@ Environment variables:
 | `RGK_MODEL`            | `gpt-5.3-codex-spark` | Codex model                                 |
 | `RGK_REASONING_EFFORT` | `low`                 | Codex reasoning effort                      |
 | `RGK_KEEP_LIMIT`       | `300`                 | Max candidates sent to Codex                |
+| `RGK_PROMPT_MAX_BYTES` | `180000`              | Max prompt bytes sent to Codex              |
 | `RGK_CODEX_TIMEOUT_MS` | `300000`              | Codex timeout                               |
 | `RGK_RG_PATH`          | `rg`                  | ripgrep executable                          |
 | `RGK_CODEX_PATH`       | `codex`               | Codex executable                            |

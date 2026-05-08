@@ -3,19 +3,32 @@ import { parseArgs, UsageError } from "./args.js";
 import { orderCandidates } from "./candidates.js";
 import { rankCandidates } from "./codex.js";
 import { loadConfig, loadRgPath } from "./config.js";
-import { execInherited, formatSpawnError, isSpawnError, runRgCandidates } from "./process.js";
+import {
+  execInherited,
+  formatSpawnError,
+  isSpawnError,
+  runCaptured,
+  runRgCandidates,
+} from "./process.js";
 
 const version = "0.1.0";
+let pipeHandlersInstalled = false;
 
 export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Promise<number> {
-  if (argv.length === 1 && (argv[0] === "--help" || argv[0] === "-h")) {
-    process.stdout.write(helpText);
+  installPipeHandlers();
+
+  if (argv.length === 1 && argv[0] === "--rgk-help") {
+    writeStdout(helpText);
     return 0;
   }
 
-  if (argv.length === 1 && argv[0] === "--version") {
-    process.stdout.write(`rgk ${version}\n`);
+  if (argv.length === 1 && argv[0] === "--rgk-version") {
+    writeStdout(`rgk ${version}\n`);
     return 0;
+  }
+
+  if (argv.length === 1 && (argv[0] === "--help" || argv[0] === "-h" || argv[0] === "--version")) {
+    return runRgThenAppendRgkInfo(argv, env);
   }
 
   let parsed;
@@ -23,7 +36,7 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
     parsed = parseArgs(argv);
   } catch (error) {
     if (error instanceof UsageError || error instanceof Error) {
-      process.stderr.write(`rgk: ${error.message}\n`);
+      writeStderr(`rgk: ${error.message}\n`);
       return 2;
     }
 
@@ -34,7 +47,7 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
     try {
       return await execInherited(loadRgPath(env), parsed.rgArgs);
     } catch (error) {
-      process.stderr.write(`rgk: ${formatSpawnError("rg", error)}\n`);
+      writeStderr(`rgk: ${formatSpawnError("rg", error)}\n`);
       return 2;
     }
   }
@@ -44,7 +57,7 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
     config = loadConfig(env);
   } catch (error) {
     if (error instanceof Error) {
-      process.stderr.write(`rgk: ${error.message}\n`);
+      writeStderr(`rgk: ${error.message}\n`);
       return 2;
     }
 
@@ -59,16 +72,16 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
       config.keepLimit,
     );
   } catch (error) {
-    process.stderr.write(`rgk: ${formatSpawnError("rg", error)}\n`);
+    writeStderr(`rgk: ${formatSpawnError("rg", error)}\n`);
     return 2;
   }
 
   if (rgResult.stderr !== "") {
-    process.stderr.write(rgResult.stderr);
+    writeStderr(rgResult.stderr);
   }
 
   if (rgResult.limitExceeded) {
-    process.stderr.write(
+    writeStderr(
       `rgk: more than ${config.keepLimit} candidates matched. Narrow the rg query or increase RGK_KEEP_LIMIT.\n`,
     );
     return 2;
@@ -95,7 +108,7 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
       : error instanceof Error
         ? error.message
         : String(error);
-    process.stderr.write(`rgk: keep filter failed: ${message}\n`);
+    writeStderr(`rgk: keep filter failed: ${message}\n`);
     return 2;
   }
 
@@ -105,10 +118,40 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
   }
 
   for (const candidate of kept) {
-    process.stdout.write(`${candidate.output}\n`);
+    writeStdout(`${candidate.output}\n`);
   }
 
   return 0;
+}
+
+async function runRgThenAppendRgkInfo(
+  argv: readonly string[],
+  env: NodeJS.ProcessEnv,
+): Promise<number> {
+  try {
+    const rgResult = await runCaptured(loadRgPath(env), argv, { inheritStdin: true });
+    if (rgResult.stdout !== "") {
+      writeStdout(rgResult.stdout);
+    }
+    if (rgResult.stderr !== "") {
+      writeStderr(rgResult.stderr);
+    }
+
+    if (rgResult.code !== 0) {
+      return rgResult.code;
+    }
+
+    if (argv[0] === "--version") {
+      writeStdout(`rgk ${version}\n`);
+    } else {
+      writeStdout(`\n${helpText}`);
+    }
+
+    return 0;
+  } catch (error) {
+    writeStderr(`rgk: ${formatSpawnError("rg", error)}\n`);
+    return 2;
+  }
 }
 
 export function withKeepRgFlags(args: readonly string[]): readonly string[] {
@@ -119,6 +162,48 @@ export function withKeepRgFlags(args: readonly string[]): readonly string[] {
   }
 
   return [...args.slice(0, terminatorIndex), ...forcedFlags, ...args.slice(terminatorIndex)];
+}
+
+function installPipeHandlers(): void {
+  if (pipeHandlersInstalled) {
+    return;
+  }
+
+  pipeHandlersInstalled = true;
+  process.stdout.on("error", handlePipeError);
+  process.stderr.on("error", handlePipeError);
+}
+
+function handlePipeError(error: NodeJS.ErrnoException): void {
+  if (error.code === "EPIPE") {
+    process.exit(0);
+  }
+
+  throw error;
+}
+
+function writeStdout(text: string): void {
+  writeStream(process.stdout, text);
+}
+
+function writeStderr(text: string): void {
+  writeStream(process.stderr, text);
+}
+
+function writeStream(stream: NodeJS.WriteStream, text: string): void {
+  try {
+    stream.write(text);
+  } catch (error) {
+    if (isEpipe(error)) {
+      process.exit(0);
+    }
+
+    throw error;
+  }
+}
+
+function isEpipe(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "EPIPE";
 }
 
 const helpText = `rgk ${version}
@@ -137,9 +222,10 @@ Environment:
   RGK_MODEL              Codex model (default: gpt-5.3-codex-spark)
   RGK_REASONING_EFFORT   Codex reasoning effort (default: low)
   RGK_KEEP_LIMIT         Max candidates sent to Codex (default: 300)
+  RGK_PROMPT_MAX_BYTES   Max prompt bytes sent to Codex (default: 180000)
   RGK_DEBUG              Print Codex diagnostics when set to 1 or true
 
-Use rg --help for ripgrep options.
+Use rg --help for ripgrep options. Use --rgk-help or --rgk-version for wrapper-only output.
 `;
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -148,7 +234,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exitCode = code;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`rgk: unexpected failure: ${message}\n`);
+    writeStderr(`rgk: unexpected failure: ${message}\n`);
     process.exitCode = 2;
   }
 }

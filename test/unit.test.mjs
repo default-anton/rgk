@@ -68,10 +68,35 @@ test("orderCandidates follows ranked_ids, ignores unknown IDs, and dedupes", () 
   assert.deepEqual(orderCandidates(candidates, "m2 missing m2 m1"), [candidates[1], candidates[0]]);
 });
 
+test("parseRgJson truncates long prompt lines around the match", () => {
+  const text = `${"a".repeat(5_000)}needle${"z".repeat(5_000)}\n`;
+  const stdout = `${JSON.stringify({
+    type: "match",
+    data: {
+      path: { text: "src/app.ts" },
+      lines: { text },
+      line_number: 7,
+      submatches: [{ start: 5_000, end: 5_006 }],
+    },
+  })}\n`;
+
+  const [candidate] = parseRgJson(stdout);
+  assert.equal(candidate.output.includes("needle"), true);
+  assert.equal(candidate.promptLine.includes("needle"), true);
+  assert.equal(Buffer.byteLength(candidate.promptLine, "utf8") < 2_100, true);
+});
+
 test("buildPrompt keeps condition and compact candidates", () => {
   assert.equal(
     buildPrompt("auth failures", [{ id: "m1", output: "a", promptLine: "m1 a" }]),
     "Condition:\nauth failures\n\nCandidates:\nm1 a\n",
+  );
+});
+
+test("buildPrompt rejects prompts above the configured byte limit", () => {
+  assert.throws(
+    () => buildPrompt("auth failures", [{ id: "m1", output: "a", promptLine: "m1 a" }], 10),
+    /RGK_PROMPT_MAX_BYTES/u,
   );
 });
 

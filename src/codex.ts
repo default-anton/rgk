@@ -46,7 +46,7 @@ export async function rankCandidates(
     await writeFile(schemaPath, `${JSON.stringify(schema)}\n`, "utf8");
     await writeFile(instructionsPath, instructions, "utf8");
 
-    const prompt = buildPrompt(condition, candidates);
+    const prompt = buildPrompt(condition, candidates, config.promptMaxBytes);
     const result = await runCaptured(
       config.codexPath,
       [
@@ -91,8 +91,20 @@ export async function rankCandidates(
   }
 }
 
-export function buildPrompt(condition: string, candidates: readonly Candidate[]): string {
-  return `Condition:\n${condition}\n\nCandidates:\n${candidates.map((candidate) => candidate.promptLine).join("\n")}\n`;
+export function buildPrompt(
+  condition: string,
+  candidates: readonly Candidate[],
+  maxBytes = 180_000,
+): string {
+  const prompt = `Condition:\n${condition}\n\nCandidates:\n${candidates.map((candidate) => candidate.promptLine).join("\n")}\n`;
+  const bytes = Buffer.byteLength(prompt, "utf8");
+  if (bytes > maxBytes) {
+    throw new Error(
+      `keep prompt is ${bytes} bytes, above RGK_PROMPT_MAX_BYTES=${maxBytes}. Narrow the rg query, lower RGK_KEEP_LIMIT, or raise RGK_PROMPT_MAX_BYTES.`,
+    );
+  }
+
+  return prompt;
 }
 
 function parseRankedIds(rawOutput: string): string {

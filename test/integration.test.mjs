@@ -32,6 +32,33 @@ console.log(JSON.stringify({ ranked_ids: "m1" }));
   assert.equal(result.stdout, "<stdin>:1:1:foo\n");
 });
 
+test("keep mode exits cleanly when stdout pipe closes early", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "rgk-test-"));
+  const fakeCodex = join(directory, "codex.mjs");
+  await writeFile(
+    fakeCodex,
+    `#!/usr/bin/env node
+const outputIndex = process.argv.indexOf("--output-last-message");
+await new Promise((resolve) => process.stdin.resume().on("end", resolve));
+const ranked_ids = Array.from({ length: 300 }, (_, index) => \`m\${(index + 1).toString(36)}\`).join(" ");
+await import("node:fs/promises").then(({ writeFile }) => writeFile(process.argv[outputIndex + 1], JSON.stringify({ ranked_ids })));
+`,
+    "utf8",
+  );
+  await chmod(fakeCodex, 0o755);
+
+  const head = spawn("head", ["-n", "1"], { stdio: ["pipe", "ignore", "ignore"] });
+  const child = spawn(process.execPath, [cliPath, "foo", "--keep", "contains foo"], {
+    env: { ...process.env, RGK_CODEX_PATH: fakeCodex },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  child.stdout.pipe(head.stdin);
+  child.stdin.end(`${"foo\\n".repeat(300)}`);
+  await Promise.all([waitForClose(head), waitForClose(child)]);
+
+  assert.equal(child.exitCode, 0);
+});
+
 test("keep mode stops rg after candidate limit", async () => {
   const directory = await mkdtemp(join(tmpdir(), "rgk-test-"));
   const fakeRg = join(directory, "rg.mjs");
@@ -53,6 +80,13 @@ for (let index = 1; index <= 1000; index += 1) {
   assert.equal(result.code, 2);
   assert.match(result.stderr, /more than 2 candidates matched/u);
 });
+
+function waitForClose(child) {
+  return new Promise((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", resolve);
+  });
+}
 
 function runCli(args, options = {}) {
   return new Promise((resolve, reject) => {
