@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { parseRgJsonLine, type Candidate } from "./candidates.js";
+import { parseRgJsonLine, type Candidate, type CandidatePresentation } from "./candidates.js";
 
 export type ProcessResult = {
   readonly code: number;
@@ -86,6 +86,7 @@ export function runRgCandidates(
   command: string,
   args: readonly string[],
   keepLimit: number,
+  presentation: CandidatePresentation,
 ): Promise<RgCandidatesResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ["inherit", "pipe", "pipe"] });
@@ -112,7 +113,7 @@ export function runRgCandidates(
         const line = pending.slice(0, newlineIndex);
         pending = pending.slice(newlineIndex + 1);
         const remainingCandidates = keepLimit + 1 - candidates.length;
-        const lineCandidates = parseRgJsonLine(line, nextId, remainingCandidates);
+        const lineCandidates = parseRgJsonLine(line, nextId, remainingCandidates, presentation);
         if (lineCandidates.length > 0) {
           candidates.push(...lineCandidates);
           nextId += lineCandidates.length;
@@ -132,7 +133,7 @@ export function runRgCandidates(
     child.on("close", (code, signal) => {
       if (!limitExceeded && pending !== "") {
         const remainingCandidates = keepLimit + 1 - candidates.length;
-        const lineCandidates = parseRgJsonLine(pending, nextId, remainingCandidates);
+        const lineCandidates = parseRgJsonLine(pending, nextId, remainingCandidates, presentation);
         if (lineCandidates.length > 0) {
           candidates.push(...lineCandidates);
           limitExceeded = candidates.length > keepLimit;

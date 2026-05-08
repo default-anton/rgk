@@ -4,8 +4,17 @@ export type Candidate = {
   readonly promptLine: string;
 };
 
-const maxPromptBodyBytes = 2_000;
-const promptContextBytes = 800;
+export type CandidatePresentation = {
+  readonly promptLineMaxBytes: number;
+  readonly outputLineMaxBytes: number;
+};
+
+const defaultPresentation: CandidatePresentation = {
+  promptLineMaxBytes: 600,
+  outputLineMaxBytes: 300,
+};
+
+const contextRatio = 0.4;
 
 type RgJsonText = {
   readonly text?: string;
@@ -27,12 +36,26 @@ type RgJsonEvent = {
   };
 };
 
-export function parseRgJson(stdout: string): readonly Candidate[] {
+type MatchSpan = {
+  readonly startBytes: number;
+  readonly start: number;
+  readonly end: number;
+};
+
+type NormalizedLine = {
+  readonly text: string;
+  readonly stringIndexForRawIndex: (rawIndex: number) => number;
+};
+
+export function parseRgJson(
+  stdout: string,
+  presentation: CandidatePresentation = defaultPresentation,
+): readonly Candidate[] {
   const candidates: Candidate[] = [];
   let nextId = 1;
 
   for (const line of stdout.split("\n")) {
-    const lineCandidates = parseRgJsonLine(line, nextId);
+    const lineCandidates = parseRgJsonLine(line, nextId, Number.POSITIVE_INFINITY, presentation);
     candidates.push(...lineCandidates);
     nextId += lineCandidates.length;
   }
@@ -44,6 +67,7 @@ export function parseRgJsonLine(
   line: string,
   nextId: number,
   maxCandidates = Number.POSITIVE_INFINITY,
+  presentation: CandidatePresentation = defaultPresentation,
 ): readonly Candidate[] {
   if (line.length === 0 || maxCandidates <= 0) {
     return [];
@@ -71,30 +95,27 @@ export function parseRgJsonLine(
   const matches =
     submatches === undefined || submatches.length === 0 ? [{ start: 0, end: 0 }] : submatches;
   const body = normalizeLineText(matchedLine.text);
-  const candidates: Candidate[] = [];
-
-  for (const match of matches) {
-    if (candidates.length >= maxCandidates) {
-      break;
-    }
-
-    const matchStartBytes = match.start ?? 0;
-    const matchEndBytes = match.end ?? matchStartBytes;
-    const matchStart = matchedLine.stringIndexForByteOffset(matchStartBytes);
-    const matchEnd = matchedLine.stringIndexForByteOffset(Math.max(matchEndBytes, matchStartBytes));
-    const column = matchStartBytes + 1;
-    const output = `${path.text}:${lineNumber}:${column}:${body}`;
-    const promptOutput = `${path.text}:${lineNumber}:${column}:${summarizeForPrompt(
-      body,
-      matchStart,
-      matchEnd,
-    )}`;
-    const id = `m${(nextId + candidates.length).toString(36)}`;
-
-    candidates.push({ id, output, promptLine: `${id} ${promptOutput}` });
+  const matchSpan = spanForMatches(matches, matchedLine.stringIndexForByteOffset);
+  if (matchSpan === null) {
+    return [];
   }
 
-  return candidates;
+  const matchStart = body.stringIndexForRawIndex(matchSpan.start);
+  const matchEnd = body.stringIndexForRawIndex(matchSpan.end);
+  const column = matchSpan.startBytes + 1;
+  const outputBody = summarizeAroundMatch(body.text, matchStart, matchEnd, {
+    maxBytes: presentation.outputLineMaxBytes,
+    contextBytes: contextBytesFor(presentation.outputLineMaxBytes),
+  });
+  const promptBody = summarizeAroundMatch(body.text, matchStart, matchEnd, {
+    maxBytes: presentation.promptLineMaxBytes,
+    contextBytes: contextBytesFor(presentation.promptLineMaxBytes),
+  });
+  const output = `${path.text}:${lineNumber}:${column}:${outputBody}`;
+  const promptOutput = `${path.text}:${lineNumber}:${column}:${promptBody}`;
+  const id = `m${nextId.toString(36)}`;
+
+  return [{ id, output, promptLine: `${id} ${promptOutput}` }];
 }
 
 export function orderCandidates(
@@ -141,16 +162,79 @@ function decodeRgJsonText(value: RgJsonText | undefined): DecodedRgJsonText | nu
   return null;
 }
 
-function normalizeLineText(text: string): string {
-  return text
-    .replaceAll("\r\n", "\n")
-    .replaceAll("\r", "\n")
-    .replace(/\n$/u, "")
-    .replaceAll("\n", "\\n");
+function normalizeLineText(text: string): NormalizedLine {
+  const indexMap = Array.from<number>({ length: text.length + 1 });
+  let normalized = "";
+  let rawIndex = 0;
+
+  indexMap[0] = 0;
+  while (rawIndex < text.length) {
+    const char = text[rawIndex];
+    if (char === undefined) {
+      break;
+    }
+
+    if (char === "\r" || char === "\n") {
+      const nextIndex = char === "\r" && text[rawIndex + 1] === "\n" ? rawIndex + 2 : rawIndex + 1;
+      if (nextIndex < text.length) {
+        normalized += "\\n";
+      }
+      for (let index = rawIndex + 1; index <= nextIndex; index += 1) {
+        indexMap[index] = normalized.length;
+      }
+      rawIndex = nextIndex;
+      continue;
+    }
+
+    normalized += char;
+    rawIndex += 1;
+    indexMap[rawIndex] = normalized.length;
+  }
+
+  return {
+    text: normalized,
+    stringIndexForRawIndex: (rawStringIndex) =>
+      indexMap[clamp(rawStringIndex, 0, text.length)] ?? normalized.length,
+  };
 }
 
-function summarizeForPrompt(body: string, matchStart: number, matchEnd: number): string {
-  if (byteLength(body) <= maxPromptBodyBytes) {
+function spanForMatches(
+  matches: readonly { readonly start?: number; readonly end?: number }[],
+  stringIndexForByteOffset: (byteOffset: number) => number,
+): MatchSpan | null {
+  let startBytes: number | null = null;
+  let start: number | null = null;
+  let end: number | null = null;
+
+  for (const match of matches) {
+    const matchStartBytes = Math.max(match.start ?? 0, 0);
+    const matchEndBytes = Math.max(match.end ?? matchStartBytes, matchStartBytes);
+    const matchStart = stringIndexForByteOffset(matchStartBytes);
+    const matchEnd = stringIndexForByteOffset(matchEndBytes);
+
+    startBytes = startBytes === null ? matchStartBytes : Math.min(startBytes, matchStartBytes);
+    start = start === null ? matchStart : Math.min(start, matchStart);
+    end = end === null ? matchEnd : Math.max(end, matchEnd);
+  }
+
+  if (startBytes === null || start === null || end === null) {
+    return null;
+  }
+
+  return { startBytes, start, end };
+}
+
+function contextBytesFor(maxBytes: number): number {
+  return Math.floor(maxBytes * contextRatio);
+}
+
+function summarizeAroundMatch(
+  body: string,
+  matchStart: number,
+  matchEnd: number,
+  options: { readonly maxBytes: number; readonly contextBytes: number },
+): string {
+  if (byteLength(body) <= options.maxBytes) {
     return body;
   }
 
@@ -158,23 +242,20 @@ function summarizeForPrompt(body: string, matchStart: number, matchEnd: number):
   const safeMatchEnd = clamp(Math.max(matchEnd, safeMatchStart), safeMatchStart, body.length);
   const matchText = body.slice(safeMatchStart, safeMatchEnd);
   const matchBytes = byteLength(matchText);
-  const truncationMarker = "...[truncated]";
+  const truncationMarker = "...";
 
-  if (matchBytes >= maxPromptBodyBytes) {
-    return `${truncateEndByBytes(
-      matchText,
-      maxPromptBodyBytes - byteLength(truncationMarker),
-    )}${truncationMarker}`;
+  if (matchBytes > options.maxBytes) {
+    return summarizeLongMatch(matchText, options.maxBytes, truncationMarker);
   }
 
-  const remainingBytes = maxPromptBodyBytes - matchBytes;
+  const remainingBytes = options.maxBytes - matchBytes;
   const prefix = summarizePrefix(
     body.slice(0, safeMatchStart),
-    Math.min(promptContextBytes, Math.floor(remainingBytes / 2)),
+    Math.min(options.contextBytes, Math.floor(remainingBytes / 2)),
   );
   const suffix = summarizeSuffix(
     body.slice(safeMatchEnd),
-    Math.min(promptContextBytes, remainingBytes - byteLength(prefix)),
+    Math.min(options.contextBytes, remainingBytes - byteLength(prefix)),
   );
 
   return `${prefix}${matchText}${suffix}`;
@@ -186,6 +267,21 @@ function summarizePrefix(value: string, maxBytes: number): string {
 
 function summarizeSuffix(value: string, maxBytes: number): string {
   return summarizeSide(value, maxBytes, truncateEndByBytes, (text, marker) => `${text}${marker}`);
+}
+
+function summarizeLongMatch(value: string, maxBytes: number, marker: string): string {
+  const markerBytes = byteLength(marker);
+  if (maxBytes <= markerBytes) {
+    return truncateEndByBytes(value, maxBytes);
+  }
+
+  const remainingBytes = maxBytes - markerBytes;
+  const prefixBytes = Math.ceil(remainingBytes / 2);
+  const suffixBytes = remainingBytes - prefixBytes;
+  return `${truncateEndByBytes(value, prefixBytes)}${marker}${truncateStartByBytes(
+    value,
+    suffixBytes,
+  )}`;
 }
 
 function summarizeSide(
@@ -202,7 +298,7 @@ function summarizeSide(
     return value;
   }
 
-  const truncationMarker = "...[truncated]";
+  const truncationMarker = "...";
   const markerBytes = byteLength(truncationMarker);
   if (maxBytes <= markerBytes) {
     return "";

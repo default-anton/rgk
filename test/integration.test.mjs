@@ -33,6 +33,30 @@ console.log(JSON.stringify({ ranked_ids: "m1" }));
   assert.equal(result.stdout, "<stdin>:1:1:foo\n");
 });
 
+test("keep mode honors configured output line budget", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "rgk-test-"));
+  const fakeCodex = join(directory, "codex.mjs");
+  await writeFile(
+    fakeCodex,
+    `#!/usr/bin/env node
+const outputIndex = process.argv.indexOf("--output-last-message");
+await new Promise((resolve) => process.stdin.resume().on("end", resolve));
+await import("node:fs/promises").then(({ writeFile }) => writeFile(process.argv[outputIndex + 1], JSON.stringify({ ranked_ids: "m1" })));
+`,
+    "utf8",
+  );
+  await chmod(fakeCodex, 0o755);
+
+  const result = await runCli(["needle", "--keep", "contains needle"], {
+    input: `${"a".repeat(2_000)}needle${"z".repeat(2_000)}\n`,
+    env: { RGK_CODEX_PATH: fakeCodex, RGK_OUTPUT_LINE_MAX_BYTES: "80" },
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /needle/u);
+  assert.equal(Buffer.byteLength(result.stdout, "utf8") < 120, true);
+});
+
 test("keep mode exits cleanly when stdout pipe closes early", async () => {
   const directory = await mkdtemp(join(tmpdir(), "rgk-test-"));
   const fakeCodex = join(directory, "codex.mjs");
@@ -63,6 +87,20 @@ await import("node:fs/promises").then(({ writeFile }) => writeFile(process.argv[
   await Promise.all([waitForClose(head), waitForClose(child)]);
 
   assert.equal(child.exitCode, 0);
+});
+
+test("keep mode rejects rg output modes that bypass JSON", async () => {
+  const result = await runCli(["foo", "-l", "--keep", "contains foo"], { input: "foo\n" });
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /does not support rg output mode -l/u);
+});
+
+test("keep mode rejects quiet output mode", async () => {
+  const result = await runCli(["foo", "-q", "--keep", "contains foo"], { input: "foo\n" });
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /does not support rg output mode -q/u);
 });
 
 test("keep mode handles codex exiting before reading prompt", async () => {

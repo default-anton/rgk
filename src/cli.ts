@@ -67,12 +67,22 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
     throw error;
   }
 
+  const incompatibleFlag = firstKeepIncompatibleRgFlag(parsed.rgArgs);
+  if (incompatibleFlag !== null) {
+    writeStderr(`rgk: --keep does not support rg output mode ${incompatibleFlag}\n`);
+    return 2;
+  }
+
   let rgResult;
   try {
     rgResult = await runRgCandidates(
       config.rgPath,
       withKeepRgFlags(parsed.rgArgs),
       config.keepLimit,
+      {
+        promptLineMaxBytes: config.promptLineMaxBytes,
+        outputLineMaxBytes: config.outputLineMaxBytes,
+      },
     );
   } catch (error) {
     writeStderr(`rgk: ${formatSpawnError("rg", error)}\n`);
@@ -167,6 +177,98 @@ export function withKeepRgFlags(args: readonly string[]): readonly string[] {
   return [...args.slice(0, terminatorIndex), ...forcedFlags, ...args.slice(terminatorIndex)];
 }
 
+export function firstKeepIncompatibleRgFlag(args: readonly string[]): string | null {
+  const incompatibleLongFlags = new Set([
+    "--count",
+    "--count-matches",
+    "--files",
+    "--files-with-matches",
+    "--files-without-match",
+    "--quiet",
+  ]);
+  const longValueFlags = new Set([
+    "--after-context",
+    "--before-context",
+    "--context",
+    "--file",
+    "--glob",
+    "--max-count",
+    "--max-filesize",
+    "--regexp",
+    "--replace",
+    "--type",
+    "--type-not",
+  ]);
+  const incompatibleShortFlags = new Set(["c", "l", "L", "q"]);
+  const shortValueFlags = new Set(["A", "B", "C", "e", "f", "g", "m", "M", "r", "t", "T"]);
+  let skipNext = false;
+
+  for (const arg of args) {
+    if (skipNext) {
+      skipNext = false;
+      continue;
+    }
+
+    if (arg === "--") {
+      return null;
+    }
+
+    if (arg.startsWith("--")) {
+      const flagName = arg.split("=", 1)[0] ?? arg;
+      if (incompatibleLongFlags.has(flagName)) {
+        return flagName;
+      }
+      if (longValueFlags.has(flagName) && !arg.includes("=")) {
+        skipNext = true;
+      }
+      continue;
+    }
+
+    if (!arg.startsWith("-") || arg === "-") {
+      continue;
+    }
+
+    const incompatibleShortFlag = firstIncompatibleShortFlag(
+      arg,
+      incompatibleShortFlags,
+      shortValueFlags,
+    );
+    if (incompatibleShortFlag !== null) {
+      return incompatibleShortFlag;
+    }
+
+    const lastFlag = arg.at(-1);
+    if (arg.length === 2 && lastFlag !== undefined && shortValueFlags.has(lastFlag)) {
+      skipNext = true;
+    }
+  }
+
+  return null;
+}
+
+function firstIncompatibleShortFlag(
+  arg: string,
+  incompatibleShortFlags: ReadonlySet<string>,
+  shortValueFlags: ReadonlySet<string>,
+): string | null {
+  for (let index = 1; index < arg.length; index += 1) {
+    const flag = arg[index];
+    if (flag === undefined) {
+      continue;
+    }
+
+    if (incompatibleShortFlags.has(flag)) {
+      return `-${flag}`;
+    }
+
+    if (shortValueFlags.has(flag)) {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 function installPipeHandlers(): void {
   if (pipeHandlersInstalled) {
     return;
@@ -232,11 +334,13 @@ Wrapper option:
   --keep <condition>   Keep and rank rg matches that satisfy the condition
 
 Environment:
-  RGK_MODEL              Codex model (default: gpt-5.3-codex-spark)
-  RGK_REASONING_EFFORT   Codex reasoning effort (default: low)
-  RGK_KEEP_LIMIT         Max candidates sent to Codex (default: 300)
-  RGK_PROMPT_MAX_BYTES   Max prompt bytes sent to Codex (default: 180000)
-  RGK_DEBUG              Print Codex diagnostics when set to 1 or true
+  RGK_MODEL                   Codex model (default: gpt-5.3-codex-spark)
+  RGK_REASONING_EFFORT        Codex reasoning effort (default: low)
+  RGK_KEEP_LIMIT              Max candidates sent to Codex (default: 300)
+  RGK_PROMPT_MAX_BYTES        Max prompt bytes sent to Codex (default: 180000)
+  RGK_PROMPT_LINE_MAX_BYTES   Max matched-line bytes sent per candidate (default: 600, min: 4)
+  RGK_OUTPUT_LINE_MAX_BYTES   Max matched-line bytes printed per result (default: 300, min: 4)
+  RGK_DEBUG                   Print Codex diagnostics when set to 1 or true
 
 Use rg --help for ripgrep options. Use --rgk-help or --rgk-version for wrapper-only output.
 `;
