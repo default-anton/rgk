@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseArgs, UsageError } from "../dist/args.js";
 import { orderCandidates, parseRgJson, parseRgJsonLine } from "../dist/candidates.js";
-import { withKeepRgFlags } from "../dist/cli.js";
+import { firstKeepIncompatibleRgFlag, withKeepRgFlags } from "../dist/cli.js";
 import { buildPrompt } from "../dist/codex.js";
 import { loadKeepConfig, loadRgPath } from "../dist/config.js";
 
@@ -272,6 +272,21 @@ test("withKeepRgFlags inserts forced flags before option terminator", () => {
     "--",
     "file.txt",
   ]);
+});
+
+test("firstKeepIncompatibleRgFlag detects rg output modes that bypass JSON", () => {
+  assert.equal(firstKeepIncompatibleRgFlag(["foo", "-l"]), "-l");
+  assert.equal(firstKeepIncompatibleRgFlag(["foo", "--count-matches"]), "--count-matches");
+  assert.equal(firstKeepIncompatibleRgFlag(["foo", "--quiet"]), "--quiet");
+  assert.equal(firstKeepIncompatibleRgFlag(["foo", "-nq"]), "-q");
+  assert.equal(firstKeepIncompatibleRgFlag(["foo", "-n"]), null);
+  assert.equal(firstKeepIncompatibleRgFlag(["-e", "-l"]), null);
+  assert.equal(firstKeepIncompatibleRgFlag(["-e-l"]), null);
+  assert.equal(firstKeepIncompatibleRgFlag(["--replace", "-l", "foo"]), null);
+  assert.equal(firstKeepIncompatibleRgFlag(["--replace=-l", "foo"]), null);
+  assert.equal(firstKeepIncompatibleRgFlag(["-r", "-l", "foo"]), null);
+  assert.equal(firstKeepIncompatibleRgFlag(["-r-l", "foo"]), null);
+  assert.equal(firstKeepIncompatibleRgFlag(["foo", "--", "-l"]), null);
 });
 
 test("loadKeepConfig reads line budget environment", () => {

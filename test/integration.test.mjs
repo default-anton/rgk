@@ -89,6 +89,20 @@ await import("node:fs/promises").then(({ writeFile }) => writeFile(process.argv[
   assert.equal(child.exitCode, 0);
 });
 
+test("keep mode rejects rg output modes that bypass JSON", async () => {
+  const result = await runCli(["foo", "-l", "--keep", "contains foo"], { input: "foo\n" });
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /does not support rg output mode -l/u);
+});
+
+test("keep mode rejects quiet output mode", async () => {
+  const result = await runCli(["foo", "-q", "--keep", "contains foo"], { input: "foo\n" });
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /does not support rg output mode -q/u);
+});
+
 test("keep mode handles codex exiting before reading prompt", async () => {
   const directory = await mkdtemp(join(tmpdir(), "rgk-test-"));
   const fakeCodex = join(directory, "codex.mjs");
