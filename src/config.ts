@@ -26,7 +26,7 @@ export function loadKeepConfig(env: NodeJS.ProcessEnv): KeepConfig {
     model: env.RGK_MODEL ?? "gpt-5.3-codex-spark",
     reasoningEffort: env.RGK_REASONING_EFFORT ?? "low",
     keepLimit: readPositiveInteger(env.RGK_KEEP_LIMIT, 300, "RGK_KEEP_LIMIT"),
-    promptMaxBytes: readPositiveInteger(env.RGK_PROMPT_MAX_BYTES, 180_000, "RGK_PROMPT_MAX_BYTES"),
+    promptMaxBytes: readPositiveInteger(env.RGK_PROMPT_MAX_BYTES, 400_000, "RGK_PROMPT_MAX_BYTES"),
     promptLineMaxBytes: readIntegerAtLeast(
       env.RGK_PROMPT_LINE_MAX_BYTES,
       600,

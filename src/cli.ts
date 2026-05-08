@@ -341,7 +341,7 @@ Environment:
   RGK_MODEL                   Codex model (default: gpt-5.3-codex-spark)
   RGK_REASONING_EFFORT        Codex reasoning effort (default: low)
   RGK_KEEP_LIMIT              Max candidates sent to Codex (default: 300)
-  RGK_PROMPT_MAX_BYTES        Max prompt bytes sent to Codex (default: 180000)
+  RGK_PROMPT_MAX_BYTES        Max prompt bytes sent to Codex (default: 400000)
   RGK_PROMPT_LINE_MAX_BYTES   Max matched-line bytes sent per candidate (default: 600, min: 4)
   RGK_OUTPUT_LINE_MAX_BYTES   Max matched-line bytes printed per result (default: 300, min: 4)
   RGK_DEBUG                   Print Codex diagnostics when set to 1 or true

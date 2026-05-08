@@ -52,7 +52,7 @@ Environment variables:
 | `RGK_MODEL`                 | `gpt-5.3-codex-spark` | Codex model                                         |
 | `RGK_REASONING_EFFORT`      | `low`                 | Codex reasoning effort                              |
 | `RGK_KEEP_LIMIT`            | `300`                 | Max candidates sent to Codex                        |
-| `RGK_PROMPT_MAX_BYTES`      | `180000`              | Max prompt bytes sent to Codex                      |
+| `RGK_PROMPT_MAX_BYTES`      | `400000`              | Max prompt bytes sent to Codex                      |
 | `RGK_PROMPT_LINE_MAX_BYTES` | `600`                 | Max matched-line bytes sent per candidate (min `4`) |
 | `RGK_OUTPUT_LINE_MAX_BYTES` | `300`                 | Max matched-line bytes printed per result (min `4`) |
 | `RGK_CODEX_TIMEOUT_MS`      | `300000`              | Codex timeout                                       |
