@@ -103,6 +103,27 @@ test("keep mode rejects quiet output mode", async () => {
   assert.match(result.stderr, /does not support rg output mode -q/u);
 });
 
+test("keep mode reports codex timeouts clearly", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "rgk-test-"));
+  const fakeCodex = join(directory, "codex.mjs");
+  await writeFile(
+    fakeCodex,
+    `#!/usr/bin/env node
+await new Promise((resolve) => setTimeout(resolve, 10_000));
+`,
+    "utf8",
+  );
+  await chmod(fakeCodex, 0o755);
+
+  const result = await runCli(["foo", "--keep", "contains foo"], {
+    input: "foo\n",
+    env: { RGK_CODEX_PATH: fakeCodex, RGK_CODEX_TIMEOUT_MS: "50" },
+  });
+
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /codex timed out after RGK_CODEX_TIMEOUT_MS=50/u);
+});
+
 test("keep mode handles codex exiting before reading prompt", async () => {
   const directory = await mkdtemp(join(tmpdir(), "rgk-test-"));
   const fakeCodex = join(directory, "codex.mjs");
