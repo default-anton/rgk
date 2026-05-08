@@ -31,3 +31,10 @@ jobs:
 
       - name: Verify
         run: pnpm run verify
+
+      - name: Smoke packed CLI
+        run: |
+          tmp="$(mktemp -d)"
+          pkg="$(npm pack --pack-destination "$tmp" --silent | tail -n 1)"
+          npm install --prefix "$tmp/install" "$tmp/$pkg"
+          "$tmp/install/node_modules/.bin/rgk" --rgk-version

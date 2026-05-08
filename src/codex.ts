@@ -81,6 +81,10 @@ export async function rankCandidates(
       process.stderr.write(result.stderr);
     }
 
+    if (result.timedOut) {
+      throw new Error(`codex timed out after RGK_CODEX_TIMEOUT_MS=${config.timeoutMs}`);
+    }
+
     if (result.code !== 0) {
       throw new Error(
         result.stderr.trim() || result.stdout.trim() || `codex exited ${result.code}`,

@@ -13,14 +13,14 @@ Without `--keep`, `rgk` execs `rg` directly. `--help`, `-h`, and `--version` sho
 ## Installation
 
 ```bash
-pnpm install -g @akuzmenko/rgk
+npm install -g @akuzmenko/rgk
 ```
 
 Requirements:
 
 - Node.js 24+
 - `rg` on `PATH`
-- `codex` on `PATH`
+- `codex` on `PATH`, authenticated and ready to run `codex exec`
 
 ## Usage
 
@@ -38,6 +38,10 @@ path/to/file:line:column:compact matched text
 ```
 
 Long lines are shortened around the matched span before they reach the agent context. Search semantics pass through to `rg`; presentation becomes plain, no-color, and line-oriented so ranking and filtering are reliable in pipes, editors, and coding-agent workflows. `--keep` rejects `rg` output modes that do not return match lines, such as count and files-with-matches modes.
+
+## Privacy
+
+Without `--keep`, `rgk` execs `rg` directly and does not call Codex. With `--keep`, the keep condition, matched paths, and compact matched lines are sent to Codex for filtering and ranking. Narrow your `rg` query first when searching private or sensitive code.
 
 ## Configuration
 

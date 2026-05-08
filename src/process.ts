@@ -5,6 +5,7 @@ export type ProcessResult = {
   readonly code: number;
   readonly stdout: string;
   readonly stderr: string;
+  readonly timedOut: boolean;
 };
 
 export type RgCandidatesResult = {
@@ -30,8 +31,16 @@ export function runCaptured(
     let stdout = "";
     let stderr = "";
     let settled = false;
+    let timedOut = false;
 
-    const timeout = setProcessTimeout(child, options.timeoutMs, () => settled);
+    const timeout = setProcessTimeout(
+      child,
+      options.timeoutMs,
+      () => settled,
+      () => {
+        timedOut = true;
+      },
+    );
 
     const stdoutStream = child.stdout;
     const stderrStream = child.stderr;
@@ -55,10 +64,12 @@ export function runCaptured(
       clearProcessTimeout(timeout);
       reject(error);
     });
-    child.on("close", (code, signal) => {
+    child.on("exit", () => {
       settled = true;
+    });
+    child.on("close", (code, signal) => {
       clearProcessTimeout(timeout);
-      resolve({ code: code ?? signalToCode(signal), stdout, stderr });
+      resolve({ code: code ?? signalToCode(signal), stdout, stderr, timedOut });
     });
 
     if (options.input !== undefined) {
@@ -190,6 +201,7 @@ function setProcessTimeout(
   child: ReturnType<typeof spawn>,
   timeoutMs: number | undefined,
   isSettled: () => boolean,
+  onTimeout: () => void,
 ): NodeJS.Timeout | undefined {
   if (timeoutMs === undefined) {
     return undefined;
@@ -200,6 +212,7 @@ function setProcessTimeout(
       return;
     }
 
+    onTimeout();
     child.kill("SIGTERM");
     setTimeout(() => child.kill("SIGKILL"), 1_000).unref();
   }, timeoutMs);
