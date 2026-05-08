@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { parseArgs, UsageError } from "../dist/args.js";
 import { orderCandidates, parseRgJson } from "../dist/candidates.js";
+import { withKeepRgFlags } from "../dist/cli.js";
 import { buildPrompt } from "../dist/codex.js";
+import { loadRgPath } from "../dist/config.js";
 
 test("parseArgs passes through normal rg args", () => {
   assert.deepEqual(parseArgs(["foo", "src", "-n"]), {
@@ -71,4 +73,19 @@ test("buildPrompt keeps condition and compact candidates", () => {
     buildPrompt("auth failures", [{ id: "m1", output: "a", promptLine: "m1 a" }]),
     "Condition:\nauth failures\n\nCandidates:\nm1 a\n",
   );
+});
+
+test("withKeepRgFlags inserts forced flags before option terminator", () => {
+  assert.deepEqual(withKeepRgFlags(["foo", "src"]), ["foo", "src", "--json", "--color=never"]);
+  assert.deepEqual(withKeepRgFlags(["-foo", "--", "file.txt"]), [
+    "-foo",
+    "--json",
+    "--color=never",
+    "--",
+    "file.txt",
+  ]);
+});
+
+test("loadRgPath does not validate keep-only environment", () => {
+  assert.equal(loadRgPath({ RGK_KEEP_LIMIT: "bad", RGK_RG_PATH: "custom-rg" }), "custom-rg");
 });

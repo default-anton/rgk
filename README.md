@@ -28,6 +28,7 @@ Requirements:
 rgk "TODO" --keep "security-sensitive follow-up"
 rgk "fetch" src --keep "network calls without timeout"
 rgk "class .*Error" --keep "errors shown to end users"
+echo "foo\nbar" | rgk foo --keep "the foo line"
 ```
 
 In `--keep` mode, output is normalized for agents and scripts:

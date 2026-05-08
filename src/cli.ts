@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { parseArgs, UsageError } from "./args.js";
-import { parseRgJson, orderCandidates } from "./candidates.js";
+import { orderCandidates } from "./candidates.js";
 import { rankCandidates } from "./codex.js";
-import { loadConfig } from "./config.js";
-import { execInherited, runCaptured } from "./process.js";
+import { loadConfig, loadRgPath } from "./config.js";
+import { execInherited, formatSpawnError, isSpawnError, runRgCandidates } from "./process.js";
 
 const version = "0.1.0";
 
@@ -19,11 +19,8 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
   }
 
   let parsed;
-  let config;
-
   try {
     parsed = parseArgs(argv);
-    config = loadConfig(env);
   } catch (error) {
     if (error instanceof UsageError || error instanceof Error) {
       process.stderr.write(`rgk: ${error.message}\n`);
@@ -34,12 +31,47 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
   }
 
   if (parsed.keep === null) {
-    return execInherited(config.rgPath, parsed.rgArgs);
+    try {
+      return await execInherited(loadRgPath(env), parsed.rgArgs);
+    } catch (error) {
+      process.stderr.write(`rgk: ${formatSpawnError("rg", error)}\n`);
+      return 2;
+    }
   }
 
-  const rgResult = await runCaptured(config.rgPath, [...parsed.rgArgs, "--json", "--color=never"]);
+  let config;
+  try {
+    config = loadConfig(env);
+  } catch (error) {
+    if (error instanceof Error) {
+      process.stderr.write(`rgk: ${error.message}\n`);
+      return 2;
+    }
+
+    throw error;
+  }
+
+  let rgResult;
+  try {
+    rgResult = await runRgCandidates(
+      config.rgPath,
+      withKeepRgFlags(parsed.rgArgs),
+      config.keepLimit,
+    );
+  } catch (error) {
+    process.stderr.write(`rgk: ${formatSpawnError("rg", error)}\n`);
+    return 2;
+  }
+
   if (rgResult.stderr !== "") {
     process.stderr.write(rgResult.stderr);
+  }
+
+  if (rgResult.limitExceeded) {
+    process.stderr.write(
+      `rgk: more than ${config.keepLimit} candidates matched. Narrow the rg query or increase RGK_KEEP_LIMIT.\n`,
+    );
+    return 2;
   }
 
   if (rgResult.code === 1) {
@@ -47,34 +79,27 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
   }
 
   if (rgResult.code !== 0) {
-    if (rgResult.stdout !== "") {
-      process.stdout.write(rgResult.stdout);
-    }
     return rgResult.code;
   }
 
-  const candidates = parseRgJson(rgResult.stdout);
-  if (candidates.length === 0) {
+  if (rgResult.candidates.length === 0) {
     return 1;
-  }
-
-  if (candidates.length > config.keepLimit) {
-    process.stderr.write(
-      `rgk: ${candidates.length} candidates exceeds RGK_KEEP_LIMIT=${config.keepLimit}. Narrow the rg query or increase RGK_KEEP_LIMIT.\n`,
-    );
-    return 2;
   }
 
   let rankedIds: string;
   try {
-    rankedIds = await rankCandidates(parsed.keep, candidates, config);
+    rankedIds = await rankCandidates(parsed.keep, rgResult.candidates, config);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = isSpawnError(error)
+      ? formatSpawnError("codex", error)
+      : error instanceof Error
+        ? error.message
+        : String(error);
     process.stderr.write(`rgk: keep filter failed: ${message}\n`);
     return 2;
   }
 
-  const kept = orderCandidates(candidates, rankedIds);
+  const kept = orderCandidates(rgResult.candidates, rankedIds);
   if (kept.length === 0) {
     return 1;
   }
@@ -84,6 +109,16 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
   }
 
   return 0;
+}
+
+export function withKeepRgFlags(args: readonly string[]): readonly string[] {
+  const terminatorIndex = args.indexOf("--");
+  const forcedFlags = ["--json", "--color=never"];
+  if (terminatorIndex === -1) {
+    return [...args, ...forcedFlags];
+  }
+
+  return [...args.slice(0, terminatorIndex), ...forcedFlags, ...args.slice(terminatorIndex)];
 }
 
 const helpText = `rgk ${version}
@@ -108,6 +143,12 @@ Use rg --help for ripgrep options.
 `;
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const code = await main(process.argv.slice(2), process.env);
-  process.exitCode = code;
+  try {
+    const code = await main(process.argv.slice(2), process.env);
+    process.exitCode = code;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`rgk: unexpected failure: ${message}\n`);
+    process.exitCode = 2;
+  }
 }

@@ -19,38 +19,47 @@ export function parseRgJson(stdout: string): readonly Candidate[] {
   let nextId = 1;
 
   for (const line of stdout.split("\n")) {
-    if (line.length === 0) {
+    const candidate = parseRgJsonLine(line, nextId);
+    if (candidate === null) {
       continue;
     }
 
-    let event: RgJsonEvent;
-    try {
-      event = JSON.parse(line) as RgJsonEvent;
-    } catch {
-      continue;
-    }
-
-    if (event.type !== "match") {
-      continue;
-    }
-
-    const path = event.data?.path?.text;
-    const text = event.data?.lines?.text;
-    const lineNumber = event.data?.line_number;
-    if (path === undefined || text === undefined || lineNumber === undefined) {
-      continue;
-    }
-
-    const column = (event.data?.submatches?.[0]?.start ?? 0) + 1;
-    const body = normalizeLineText(text);
-    const output = `${path}:${lineNumber}:${column}:${body}`;
-    const id = `m${nextId.toString(36)}`;
-
-    candidates.push({ id, output, promptLine: `${id} ${output}` });
+    candidates.push(candidate);
     nextId += 1;
   }
 
   return candidates;
+}
+
+export function parseRgJsonLine(line: string, nextId: number): Candidate | null {
+  if (line.length === 0) {
+    return null;
+  }
+
+  let event: RgJsonEvent;
+  try {
+    event = JSON.parse(line) as RgJsonEvent;
+  } catch {
+    return null;
+  }
+
+  if (event.type !== "match") {
+    return null;
+  }
+
+  const path = event.data?.path?.text;
+  const text = event.data?.lines?.text;
+  const lineNumber = event.data?.line_number;
+  if (path === undefined || text === undefined || lineNumber === undefined) {
+    return null;
+  }
+
+  const column = (event.data?.submatches?.[0]?.start ?? 0) + 1;
+  const body = normalizeLineText(text);
+  const output = `${path}:${lineNumber}:${column}:${body}`;
+  const id = `m${nextId.toString(36)}`;
+
+  return { id, output, promptLine: `${id} ${output}` };
 }
 
 export function orderCandidates(
