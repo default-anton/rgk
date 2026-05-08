@@ -7,11 +7,21 @@ export type Candidate = {
 const maxPromptBodyBytes = 2_000;
 const promptContextBytes = 800;
 
+type RgJsonText = {
+  readonly text?: string;
+  readonly bytes?: string;
+};
+
+type DecodedRgJsonText = {
+  readonly text: string;
+  readonly stringIndexForByteOffset: (byteOffset: number) => number;
+};
+
 type RgJsonEvent = {
   readonly type?: string;
   readonly data?: {
-    readonly path?: { readonly text?: string };
-    readonly lines?: { readonly text?: string };
+    readonly path?: RgJsonText;
+    readonly lines?: RgJsonText;
     readonly line_number?: number;
     readonly submatches?: readonly { readonly start?: number; readonly end?: number }[];
   };
@@ -46,26 +56,26 @@ export function parseRgJsonLine(line: string, nextId: number): readonly Candidat
     return [];
   }
 
-  const path = event.data?.path?.text;
-  const text = event.data?.lines?.text;
+  const path = decodeRgJsonText(event.data?.path);
+  const matchedLine = decodeRgJsonText(event.data?.lines);
   const lineNumber = event.data?.line_number;
-  if (path === undefined || text === undefined || lineNumber === undefined) {
+  if (path === null || matchedLine === null || lineNumber === undefined) {
     return [];
   }
 
   const submatches = event.data?.submatches;
   const matches =
     submatches === undefined || submatches.length === 0 ? [{ start: 0, end: 0 }] : submatches;
-  const body = normalizeLineText(text);
+  const body = normalizeLineText(matchedLine.text);
 
   return matches.map((match, index) => {
     const matchStartBytes = match.start ?? 0;
     const matchEndBytes = match.end ?? matchStartBytes;
-    const matchStart = byteOffsetToStringIndex(body, matchStartBytes);
-    const matchEnd = byteOffsetToStringIndex(body, Math.max(matchEndBytes, matchStartBytes));
+    const matchStart = matchedLine.stringIndexForByteOffset(matchStartBytes);
+    const matchEnd = matchedLine.stringIndexForByteOffset(Math.max(matchEndBytes, matchStartBytes));
     const column = matchStartBytes + 1;
-    const output = `${path}:${lineNumber}:${column}:${body}`;
-    const promptOutput = `${path}:${lineNumber}:${column}:${summarizeForPrompt(
+    const output = `${path.text}:${lineNumber}:${column}:${body}`;
+    const promptOutput = `${path.text}:${lineNumber}:${column}:${summarizeForPrompt(
       body,
       matchStart,
       matchEnd,
@@ -99,6 +109,27 @@ export function orderCandidates(
   return ordered;
 }
 
+function decodeRgJsonText(value: RgJsonText | undefined): DecodedRgJsonText | null {
+  if (value?.text !== undefined) {
+    const text = value.text;
+    return {
+      text,
+      stringIndexForByteOffset: (byteOffset) => byteOffsetToStringIndex(text, byteOffset),
+    };
+  }
+
+  if (value?.bytes !== undefined) {
+    const bytes = Buffer.from(value.bytes, "base64");
+    return {
+      text: bytes.toString("utf8"),
+      stringIndexForByteOffset: (byteOffset) =>
+        bytes.subarray(0, clamp(byteOffset, 0, bytes.length)).toString("utf8").length,
+    };
+  }
+
+  return null;
+}
+
 function normalizeLineText(text: string): string {
   return text
     .replaceAll("\r\n", "\n")
@@ -115,27 +146,58 @@ function summarizeForPrompt(body: string, matchStart: number, matchEnd: number):
   const safeMatchStart = clamp(matchStart, 0, body.length);
   const safeMatchEnd = clamp(Math.max(matchEnd, safeMatchStart), safeMatchStart, body.length);
   const matchText = body.slice(safeMatchStart, safeMatchEnd);
+  const matchBytes = byteLength(matchText);
+  const truncationMarker = "...[truncated]";
 
-  if (byteLength(matchText) >= maxPromptBodyBytes) {
-    return `${truncateEndByBytes(matchText, maxPromptBodyBytes - byteLength("...[truncated]"))}...[truncated]`;
+  if (matchBytes >= maxPromptBodyBytes) {
+    return `${truncateEndByBytes(
+      matchText,
+      maxPromptBodyBytes - byteLength(truncationMarker),
+    )}${truncationMarker}`;
   }
 
-  const prefixBudget = Math.min(
-    promptContextBytes,
-    Math.floor((maxPromptBodyBytes - byteLength(matchText)) / 2),
+  const remainingBytes = maxPromptBodyBytes - matchBytes;
+  const prefix = summarizePrefix(
+    body.slice(0, safeMatchStart),
+    Math.min(promptContextBytes, Math.floor(remainingBytes / 2)),
   );
-  const suffixBudget = maxPromptBodyBytes - byteLength(matchText) - prefixBudget;
-  const prefix = truncateStartByBytes(body.slice(0, safeMatchStart), prefixBudget);
-  const suffix = truncateEndByBytes(body.slice(safeMatchEnd), suffixBudget);
-  const prefixMarker =
-    byteLength(body.slice(0, safeMatchStart)) > byteLength(prefix) ? "...[truncated]" : "";
-  const suffixMarker =
-    byteLength(body.slice(safeMatchEnd)) > byteLength(suffix) ? "...[truncated]" : "";
+  const suffix = summarizeSuffix(
+    body.slice(safeMatchEnd),
+    Math.min(promptContextBytes, remainingBytes - byteLength(prefix)),
+  );
 
-  return truncateEndByBytes(
-    `${prefixMarker}${prefix}${matchText}${suffix}${suffixMarker}`,
-    maxPromptBodyBytes,
-  );
+  return `${prefix}${matchText}${suffix}`;
+}
+
+function summarizePrefix(value: string, maxBytes: number): string {
+  return summarizeSide(value, maxBytes, truncateStartByBytes, (text, marker) => `${marker}${text}`);
+}
+
+function summarizeSuffix(value: string, maxBytes: number): string {
+  return summarizeSide(value, maxBytes, truncateEndByBytes, (text, marker) => `${text}${marker}`);
+}
+
+function summarizeSide(
+  value: string,
+  maxBytes: number,
+  truncate: (value: string, maxBytes: number) => string,
+  formatTruncated: (text: string, marker: string) => string,
+): string {
+  if (value === "" || maxBytes <= 0) {
+    return "";
+  }
+
+  if (byteLength(value) <= maxBytes) {
+    return value;
+  }
+
+  const truncationMarker = "...[truncated]";
+  const markerBytes = byteLength(truncationMarker);
+  if (maxBytes <= markerBytes) {
+    return "";
+  }
+
+  return formatTruncated(truncate(value, maxBytes - markerBytes), truncationMarker);
 }
 
 function truncateStartByBytes(value: string, maxBytes: number): string {

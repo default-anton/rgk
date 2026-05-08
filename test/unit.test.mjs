@@ -132,6 +132,46 @@ test("parseRgJson maps ripgrep byte offsets before summarizing unicode lines", (
   assert.equal(candidate.promptLine.includes("needle"), true);
 });
 
+test("parseRgJson keeps matches emitted with base64 bytes", () => {
+  const rawLine = Buffer.from([0x66, 0x6f, 0x6f, 0x20, 0xff, 0x20, 0x62, 0x61, 0x72, 0x0a]);
+  const stdout = `${JSON.stringify({
+    type: "match",
+    data: {
+      path: { bytes: Buffer.from("src/app.ts", "utf8").toString("base64") },
+      lines: { bytes: rawLine.toString("base64") },
+      line_number: 7,
+      submatches: [{ start: 0, end: 3 }],
+    },
+  })}\n`;
+
+  assert.deepEqual(parseRgJson(stdout), [
+    {
+      id: "m1",
+      output: "src/app.ts:7:1:foo � bar",
+      promptLine: "m1 src/app.ts:7:1:foo � bar",
+    },
+  ]);
+});
+
+test("parseRgJson prompt summaries preserve long matches before context", () => {
+  const prefix = "a".repeat(5_000);
+  const match = `${"M".repeat(1_980)}ENDMATCH`;
+  const text = `${prefix}${match}${"z".repeat(5_000)}\n`;
+  const stdout = `${JSON.stringify({
+    type: "match",
+    data: {
+      path: { text: "src/app.ts" },
+      lines: { text },
+      line_number: 7,
+      submatches: [{ start: prefix.length, end: prefix.length + match.length }],
+    },
+  })}\n`;
+
+  const [candidate] = parseRgJson(stdout);
+  assert.equal(candidate.promptLine.includes("ENDMATCH"), true);
+  assert.equal(Buffer.byteLength(candidate.promptLine, "utf8") < 2_100, true);
+});
+
 test("buildPrompt keeps condition and compact candidates", () => {
   assert.equal(
     buildPrompt("auth failures", [{ id: "m1", output: "a", promptLine: "m1 a" }]),
