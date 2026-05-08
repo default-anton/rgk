@@ -31,28 +31,30 @@ rgk "class .*Error" --keep "errors shown to end users"
 echo "foo\nbar" | rgk foo --keep "the foo line"
 ```
 
-In `--keep` mode, output is normalized for agents and scripts:
+In `--keep` mode, output is normalized and match-centered for agents and scripts:
 
 ```text
-path/to/file:line:column:matched text
+path/to/file:line:column:compact matched text
 ```
 
-That is intentional. Search semantics pass through to `rg`; presentation becomes plain, no-color, and line-oriented so ranking and filtering are reliable in pipes, editors, and coding-agent workflows.
+Long lines are shortened around the matched span before they reach the agent context. Search semantics pass through to `rg`; presentation becomes plain, no-color, and line-oriented so ranking and filtering are reliable in pipes, editors, and coding-agent workflows. `--keep` rejects `rg` output modes that do not return match lines, such as count and files-with-matches modes.
 
 ## Configuration
 
 Environment variables:
 
-| Variable               | Default               | Description                                 |
-| ---------------------- | --------------------- | ------------------------------------------- |
-| `RGK_MODEL`            | `gpt-5.3-codex-spark` | Codex model                                 |
-| `RGK_REASONING_EFFORT` | `low`                 | Codex reasoning effort                      |
-| `RGK_KEEP_LIMIT`       | `300`                 | Max candidates sent to Codex                |
-| `RGK_PROMPT_MAX_BYTES` | `180000`              | Max prompt bytes sent to Codex              |
-| `RGK_CODEX_TIMEOUT_MS` | `300000`              | Codex timeout                               |
-| `RGK_RG_PATH`          | `rg`                  | ripgrep executable                          |
-| `RGK_CODEX_PATH`       | `codex`               | Codex executable                            |
-| `RGK_DEBUG`            | unset                 | Set `1` or `true` to show Codex diagnostics |
+| Variable                    | Default               | Description                                         |
+| --------------------------- | --------------------- | --------------------------------------------------- |
+| `RGK_MODEL`                 | `gpt-5.3-codex-spark` | Codex model                                         |
+| `RGK_REASONING_EFFORT`      | `low`                 | Codex reasoning effort                              |
+| `RGK_KEEP_LIMIT`            | `300`                 | Max candidates sent to Codex                        |
+| `RGK_PROMPT_MAX_BYTES`      | `180000`              | Max prompt bytes sent to Codex                      |
+| `RGK_PROMPT_LINE_MAX_BYTES` | `600`                 | Max matched-line bytes sent per candidate (min `4`) |
+| `RGK_OUTPUT_LINE_MAX_BYTES` | `300`                 | Max matched-line bytes printed per result (min `4`) |
+| `RGK_CODEX_TIMEOUT_MS`      | `300000`              | Codex timeout                                       |
+| `RGK_RG_PATH`               | `rg`                  | ripgrep executable                                  |
+| `RGK_CODEX_PATH`            | `codex`               | Codex executable                                    |
+| `RGK_DEBUG`                 | unset                 | Set `1` or `true` to show Codex diagnostics         |
 
 ## Exit codes
 

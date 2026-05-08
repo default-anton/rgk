@@ -73,6 +73,10 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
       config.rgPath,
       withKeepRgFlags(parsed.rgArgs),
       config.keepLimit,
+      {
+        promptLineMaxBytes: config.promptLineMaxBytes,
+        outputLineMaxBytes: config.outputLineMaxBytes,
+      },
     );
   } catch (error) {
     writeStderr(`rgk: ${formatSpawnError("rg", error)}\n`);
@@ -232,11 +236,13 @@ Wrapper option:
   --keep <condition>   Keep and rank rg matches that satisfy the condition
 
 Environment:
-  RGK_MODEL              Codex model (default: gpt-5.3-codex-spark)
-  RGK_REASONING_EFFORT   Codex reasoning effort (default: low)
-  RGK_KEEP_LIMIT         Max candidates sent to Codex (default: 300)
-  RGK_PROMPT_MAX_BYTES   Max prompt bytes sent to Codex (default: 180000)
-  RGK_DEBUG              Print Codex diagnostics when set to 1 or true
+  RGK_MODEL                   Codex model (default: gpt-5.3-codex-spark)
+  RGK_REASONING_EFFORT        Codex reasoning effort (default: low)
+  RGK_KEEP_LIMIT              Max candidates sent to Codex (default: 300)
+  RGK_PROMPT_MAX_BYTES        Max prompt bytes sent to Codex (default: 180000)
+  RGK_PROMPT_LINE_MAX_BYTES   Max matched-line bytes sent per candidate (default: 600, min: 4)
+  RGK_OUTPUT_LINE_MAX_BYTES   Max matched-line bytes printed per result (default: 300, min: 4)
+  RGK_DEBUG                   Print Codex diagnostics when set to 1 or true
 
 Use rg --help for ripgrep options. Use --rgk-help or --rgk-version for wrapper-only output.
 `;

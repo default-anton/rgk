@@ -33,6 +33,30 @@ console.log(JSON.stringify({ ranked_ids: "m1" }));
   assert.equal(result.stdout, "<stdin>:1:1:foo\n");
 });
 
+test("keep mode honors configured output line budget", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "rgk-test-"));
+  const fakeCodex = join(directory, "codex.mjs");
+  await writeFile(
+    fakeCodex,
+    `#!/usr/bin/env node
+const outputIndex = process.argv.indexOf("--output-last-message");
+await new Promise((resolve) => process.stdin.resume().on("end", resolve));
+await import("node:fs/promises").then(({ writeFile }) => writeFile(process.argv[outputIndex + 1], JSON.stringify({ ranked_ids: "m1" })));
+`,
+    "utf8",
+  );
+  await chmod(fakeCodex, 0o755);
+
+  const result = await runCli(["needle", "--keep", "contains needle"], {
+    input: `${"a".repeat(2_000)}needle${"z".repeat(2_000)}\n`,
+    env: { RGK_CODEX_PATH: fakeCodex, RGK_OUTPUT_LINE_MAX_BYTES: "80" },
+  });
+
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /needle/u);
+  assert.equal(Buffer.byteLength(result.stdout, "utf8") < 120, true);
+});
+
 test("keep mode exits cleanly when stdout pipe closes early", async () => {
   const directory = await mkdtemp(join(tmpdir(), "rgk-test-"));
   const fakeCodex = join(directory, "codex.mjs");
