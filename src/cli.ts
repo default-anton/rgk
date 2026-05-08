@@ -280,7 +280,7 @@ function installPipeHandlers(): void {
 }
 
 function handlePipeError(error: NodeJS.ErrnoException): void {
-  if (error.code === "EPIPE") {
+  if (isClosedPipeError(error)) {
     process.exit(0);
   }
 
@@ -299,7 +299,7 @@ function writeStream(stream: NodeJS.WriteStream, text: string): void {
   try {
     stream.write(text);
   } catch (error) {
-    if (isEpipe(error)) {
+    if (isClosedPipeError(error)) {
       process.exit(0);
     }
 
@@ -307,8 +307,12 @@ function writeStream(stream: NodeJS.WriteStream, text: string): void {
   }
 }
 
-function isEpipe(error: unknown): boolean {
-  return error instanceof Error && "code" in error && error.code === "EPIPE";
+function isClosedPipeError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    (error.code === "EPIPE" || error.code === "ENOTCONN")
+  );
 }
 
 function readPackageVersion(): string {
