@@ -1,0 +1,53 @@
+{
+  "name": "rgk",
+  "version": "0.1.0",
+  "description": "ripgrep with an LLM-powered --keep post-filter",
+  "keywords": [
+    "codex",
+    "llm",
+    "rg",
+    "ripgrep",
+    "search"
+  ],
+  "homepage": "https://github.com/default-anton/rgk#readme",
+  "bugs": {
+    "url": "https://github.com/default-anton/rgk/issues"
+  },
+  "license": "MIT",
+  "author": "Anton Kuzmenko <hotk@hey.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/default-anton/rgk.git"
+  },
+  "bin": {
+    "rgk": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit",
+    "clean": "rm -rf dist",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint . --deny-warnings",
+    "test": "pnpm run build && node --test test/*.test.mjs",
+    "verify": "pnpm run format:check && pnpm run lint && pnpm run check && pnpm run test",
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "pnpm run verify"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.2",
+    "oxfmt": "^0.48.0",
+    "oxlint": "^1.63.0",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "packageManager": "pnpm@10.33.0"
+}

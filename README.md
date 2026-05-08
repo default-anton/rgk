@@ -1,0 +1,70 @@
+# rgk
+
+`rgk` is `rg` plus one extra option:
+
+```bash
+rgk PATTERN --keep "natural language condition"
+```
+
+`rg` still does the fast lexical search. `--keep` sends the matching lines to Codex, keeps only results that satisfy the condition, and prints kept results ranked strongest first.
+
+Without `--keep`, `rgk` execs `rg` directly.
+
+## Installation
+
+```bash
+pnpm install -g rgk
+```
+
+Requirements:
+
+- Node.js 24+
+- `rg` on `PATH`
+- `codex` on `PATH`
+
+## Usage
+
+```bash
+rgk "TODO" --keep "security-sensitive follow-up"
+rgk "fetch" src --keep "network calls without timeout"
+rgk "class .*Error" --keep "errors shown to end users"
+```
+
+In `--keep` mode, output is normalized for agents and scripts:
+
+```text
+path/to/file:line:column:matched text
+```
+
+That is intentional. Search semantics pass through to `rg`; presentation becomes plain, no-color, and line-oriented so ranking and filtering are reliable in pipes, editors, and coding-agent workflows.
+
+## Configuration
+
+Environment variables:
+
+| Variable               | Default               | Description                                 |
+| ---------------------- | --------------------- | ------------------------------------------- |
+| `RGK_MODEL`            | `gpt-5.3-codex-spark` | Codex model                                 |
+| `RGK_REASONING_EFFORT` | `low`                 | Codex reasoning effort                      |
+| `RGK_KEEP_LIMIT`       | `300`                 | Max candidates sent to Codex                |
+| `RGK_CODEX_TIMEOUT_MS` | `300000`              | Codex timeout                               |
+| `RGK_RG_PATH`          | `rg`                  | ripgrep executable                          |
+| `RGK_CODEX_PATH`       | `codex`               | Codex executable                            |
+| `RGK_DEBUG`            | unset                 | Set `1` or `true` to show Codex diagnostics |
+
+## Exit codes
+
+- `0`: kept results printed
+- `1`: no `rg` matches, or no kept results
+- `2`: invalid usage, `rg` error, or Codex/filter failure
+
+## Development
+
+```bash
+pnpm install
+pnpm run verify
+```
+
+## License
+
+MIT

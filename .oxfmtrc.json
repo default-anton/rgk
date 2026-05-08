@@ -1,0 +1,9 @@
+{
+  "formatter": {
+    "lineWidth": 100,
+    "indent": "space",
+    "indentWidth": 2,
+    "quotes": "double",
+    "semicolons": true
+  }
+}
