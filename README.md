@@ -31,6 +31,12 @@ rgk "class .*Error" --keep "errors shown to end users"
 echo "foo\nbar" | rgk foo --keep "the foo line"
 ```
 
+Recommended global `AGENTS.md` instruction for coding agents:
+
+```md
+- Prefer `rgk` over `rg`; it accepts the same args, and when exploring use `--keep '<natural language condition>'` to Codex-filter/rank matched lines into `path:line:column:text`; omit `--keep` only when you need every literal match, e.g. refactors/edits.
+```
+
 In `--keep` mode, output is normalized and match-centered for agents and scripts:
 
 ```text
