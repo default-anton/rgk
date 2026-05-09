@@ -17,7 +17,7 @@ All notable changes to `rgk` are documented here.
 
 ### Changed
 
-- None.
+- Changed the default Codex model to `gpt-5.4-mini` and reasoning effort to `medium`.
 
 ### Fixed
 

@@ -53,18 +53,18 @@ Without `--keep`, `rgk` execs `rg` directly and does not call Codex. With `--kee
 
 Environment variables:
 
-| Variable                    | Default               | Description                                         |
-| --------------------------- | --------------------- | --------------------------------------------------- |
-| `RGK_MODEL`                 | `gpt-5.3-codex-spark` | Codex model                                         |
-| `RGK_REASONING_EFFORT`      | `low`                 | Codex reasoning effort                              |
-| `RGK_KEEP_LIMIT`            | `300`                 | Max candidates sent to Codex                        |
-| `RGK_PROMPT_MAX_BYTES`      | `400000`              | Max prompt bytes sent to Codex                      |
-| `RGK_PROMPT_LINE_MAX_BYTES` | `600`                 | Max matched-line bytes sent per candidate (min `4`) |
-| `RGK_OUTPUT_LINE_MAX_BYTES` | `300`                 | Max matched-line bytes printed per result (min `4`) |
-| `RGK_CODEX_TIMEOUT_MS`      | `300000`              | Codex timeout                                       |
-| `RGK_RG_PATH`               | `rg`                  | ripgrep executable                                  |
-| `RGK_CODEX_PATH`            | `codex`               | Codex executable                                    |
-| `RGK_DEBUG`                 | unset                 | Set `1` or `true` to show Codex diagnostics         |
+| Variable                    | Default        | Description                                         |
+| --------------------------- | -------------- | --------------------------------------------------- |
+| `RGK_MODEL`                 | `gpt-5.4-mini` | Codex model                                         |
+| `RGK_REASONING_EFFORT`      | `medium`       | Codex reasoning effort                              |
+| `RGK_KEEP_LIMIT`            | `300`          | Max candidates sent to Codex                        |
+| `RGK_PROMPT_MAX_BYTES`      | `400000`       | Max prompt bytes sent to Codex                      |
+| `RGK_PROMPT_LINE_MAX_BYTES` | `600`          | Max matched-line bytes sent per candidate (min `4`) |
+| `RGK_OUTPUT_LINE_MAX_BYTES` | `300`          | Max matched-line bytes printed per result (min `4`) |
+| `RGK_CODEX_TIMEOUT_MS`      | `300000`       | Codex timeout                                       |
+| `RGK_RG_PATH`               | `rg`           | ripgrep executable                                  |
+| `RGK_CODEX_PATH`            | `codex`        | Codex executable                                    |
+| `RGK_DEBUG`                 | unset          | Set `1` or `true` to show Codex diagnostics         |
 
 ## Exit codes
 
