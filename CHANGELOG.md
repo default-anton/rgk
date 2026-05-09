@@ -1,0 +1,39 @@
+# Changelog
+
+All notable changes to `rgk` are documented here.
+
+## Format
+
+- Keep `## [Unreleased]` at the top.
+- Use release headers as `## [X.Y.Z] - YYYY-MM-DD`.
+- Group entries under `### Added`, `### Changed`, `### Fixed` (optionally `### Removed` / `### Security`).
+- Keep entries short and operator/user-facing.
+
+## [Unreleased]
+
+### Added
+
+- None.
+
+### Changed
+
+- None.
+
+### Fixed
+
+- None.
+
+## [0.1.0] - 2026-05-08
+
+### Added
+
+- Added `rgk`, a ripgrep-compatible CLI with LLM-powered `--keep` filtering and ranking.
+- Added npm package publishing for `@akuzmenko/rgk`.
+
+### Changed
+
+- None.
+
+### Fixed
+
+- None.
