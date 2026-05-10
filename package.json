@@ -1,6 +1,6 @@
 {
   "name": "@akuzmenko/rgk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ripgrep with an LLM-powered --keep post-filter",
   "keywords": [
     "codex",

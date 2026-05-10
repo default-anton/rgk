@@ -13,6 +13,20 @@ All notable changes to `rgk` are documented here.
 
 ### Added
 
+- None.
+
+### Changed
+
+- None.
+
+### Fixed
+
+- None.
+
+## [0.1.2] - 2026-05-09
+
+### Added
+
 - Added a Pi package extension that aliases Pi bash-tool `rg` commands to `rgk`.
 
 ### Changed
