@@ -16,6 +16,12 @@ Without `--keep`, `rgk` execs `rg` directly. `--help`, `-h`, and `--version` sho
 npm install -g @akuzmenko/rgk
 ```
 
+For Pi, install the package as an extension to make Pi's `bash` tool expand `rg` commands to `rgk`:
+
+```bash
+pi install npm:@akuzmenko/rgk
+```
+
 Requirements:
 
 - Node.js 24+
