@@ -23,6 +23,20 @@ All notable changes to `rgk` are documented here.
 
 - None.
 
+## [0.2.2] - 2026-05-11
+
+### Added
+
+- None.
+
+### Changed
+
+- Clarified the recommended AGENTS.md guidance for `rgk` and the Pi `rg` extension.
+
+### Fixed
+
+- None.
+
 ## [0.2.1] - 2026-05-10
 
 ### Added

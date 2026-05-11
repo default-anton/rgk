@@ -40,7 +40,13 @@ echo "foo\nbar" | rgk foo --keep "the foo line"
 Recommended global `AGENTS.md` instruction for coding agents:
 
 ```md
-- Prefer `rgk` over `rg`; it accepts the same args, and when exploring use `--keep '<natural language condition>'` to Codex-filter/rank matched lines into `path:line:column:text`; omit `--keep` only when you need every literal match, e.g. refactors/edits.
+- Prefer `rgk` over `rg`; it accepts the same args. When exploring with `rgk`, add `--keep '<natural language condition>'` to Codex-filter/rank matched lines into `path:line:column:text`; omit `--keep` when using bare `rg` or when you need every literal match, e.g. refactors/edits.
+```
+
+Recommended global `AGENTS.md` instruction for Pi coding agents with the `rgk` extension installed:
+
+```md
+- Prefer `rg`/ripgrep for searching text in files. When exploring with `rg`, add `--keep '<natural language condition>'` (a Codex-only `rg` extension) to filter/rank matched lines into `path:line:column:text`; omit `--keep` when you need every literal match, e.g. refactors/edits.
 ```
 
 In `--keep` mode, output is normalized and match-centered for agents and scripts:
