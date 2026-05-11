@@ -17,7 +17,7 @@ All notable changes to `rgk` are documented here.
 
 ### Changed
 
-- None.
+- Changed the default Codex reasoning effort to `none`.
 
 ### Fixed
 

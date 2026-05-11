@@ -62,7 +62,7 @@ Environment variables:
 | Variable                     | Default        | Description                                         |
 | ---------------------------- | -------------- | --------------------------------------------------- |
 | `RGK_MODEL`                  | `gpt-5.4-mini` | Codex model                                         |
-| `RGK_REASONING_EFFORT`       | `medium`       | Codex reasoning effort                              |
+| `RGK_REASONING_EFFORT`       | `none`         | Codex reasoning effort                              |
 | `RGK_PROMPT_MAX_BYTES`       | `400000`       | Max prompt bytes per Codex request                  |
 | `RGK_TOTAL_PROMPT_MAX_BYTES` | `4000000`      | Max total keep prompt bytes processed               |
 | `RGK_PROMPT_LINE_MAX_BYTES`  | `600`          | Max matched-line bytes sent per candidate (min `4`) |

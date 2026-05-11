@@ -25,7 +25,7 @@ export function loadKeepConfig(env: NodeJS.ProcessEnv): KeepConfig {
   return {
     codexPath: env.RGK_CODEX_PATH ?? "codex",
     model: env.RGK_MODEL ?? "gpt-5.4-mini",
-    reasoningEffort: env.RGK_REASONING_EFFORT ?? "medium",
+    reasoningEffort: env.RGK_REASONING_EFFORT ?? "none",
     promptMaxBytes: readPositiveInteger(env.RGK_PROMPT_MAX_BYTES, 400_000, "RGK_PROMPT_MAX_BYTES"),
     totalPromptMaxBytes: readPositiveInteger(
       env.RGK_TOTAL_PROMPT_MAX_BYTES,

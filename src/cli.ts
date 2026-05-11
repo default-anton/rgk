@@ -345,7 +345,7 @@ Wrapper option:
 
 Environment:
   RGK_MODEL                   Codex model (default: gpt-5.4-mini)
-  RGK_REASONING_EFFORT        Codex reasoning effort (default: medium)
+  RGK_REASONING_EFFORT        Codex reasoning effort (default: none)
   RGK_PROMPT_MAX_BYTES        Max prompt bytes per Codex request (default: 400000)
   RGK_TOTAL_PROMPT_MAX_BYTES  Max total keep prompt bytes processed (default: 4000000)
   RGK_PROMPT_LINE_MAX_BYTES   Max matched-line bytes sent per candidate (default: 600, min: 4)

@@ -315,6 +315,7 @@ test("loadKeepConfig reads keep budget environment", () => {
     RGK_TOTAL_PROMPT_MAX_BYTES: "900000",
     RGK_CODEX_CONCURRENCY: "2",
   });
+  assert.equal(config.reasoningEffort, "none");
   assert.equal(config.promptLineMaxBytes, 120);
   assert.equal(config.outputLineMaxBytes, 80);
   assert.equal(config.totalPromptMaxBytes, 900_000);
