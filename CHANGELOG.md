@@ -13,6 +13,20 @@ All notable changes to `rgk` are documented here.
 
 ### Added
 
+- None.
+
+### Changed
+
+- None.
+
+### Fixed
+
+- None.
+
+## [0.2.0] - 2026-05-10
+
+### Added
+
 - Added automatic multi-request `--keep` filtering when results exceed one Codex prompt.
 - Added `RGK_TOTAL_PROMPT_MAX_BYTES` and `RGK_CODEX_CONCURRENCY` keep-mode controls.
 
