@@ -6,10 +6,11 @@ export type KeepConfig = {
   readonly codexPath: string;
   readonly model: string;
   readonly reasoningEffort: string;
-  readonly keepLimit: number;
   readonly promptMaxBytes: number;
+  readonly totalPromptMaxBytes: number;
   readonly promptLineMaxBytes: number;
   readonly outputLineMaxBytes: number;
+  readonly codexConcurrency: number;
   readonly timeoutMs: number;
   readonly debug: boolean;
 };
@@ -25,8 +26,12 @@ export function loadKeepConfig(env: NodeJS.ProcessEnv): KeepConfig {
     codexPath: env.RGK_CODEX_PATH ?? "codex",
     model: env.RGK_MODEL ?? "gpt-5.4-mini",
     reasoningEffort: env.RGK_REASONING_EFFORT ?? "medium",
-    keepLimit: readPositiveInteger(env.RGK_KEEP_LIMIT, 300, "RGK_KEEP_LIMIT"),
     promptMaxBytes: readPositiveInteger(env.RGK_PROMPT_MAX_BYTES, 400_000, "RGK_PROMPT_MAX_BYTES"),
+    totalPromptMaxBytes: readPositiveInteger(
+      env.RGK_TOTAL_PROMPT_MAX_BYTES,
+      4_000_000,
+      "RGK_TOTAL_PROMPT_MAX_BYTES",
+    ),
     promptLineMaxBytes: readIntegerAtLeast(
       env.RGK_PROMPT_LINE_MAX_BYTES,
       600,
@@ -39,6 +44,7 @@ export function loadKeepConfig(env: NodeJS.ProcessEnv): KeepConfig {
       minLineMaxBytes,
       "RGK_OUTPUT_LINE_MAX_BYTES",
     ),
+    codexConcurrency: readPositiveInteger(env.RGK_CODEX_CONCURRENCY, 4, "RGK_CODEX_CONCURRENCY"),
     timeoutMs: readPositiveInteger(env.RGK_CODEX_TIMEOUT_MS, 300_000, "RGK_CODEX_TIMEOUT_MS"),
     debug: env.RGK_DEBUG === "1" || env.RGK_DEBUG === "true",
   };

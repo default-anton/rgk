@@ -1,9 +1,12 @@
-import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Candidate } from "./candidates.js";
 import type { Config } from "./config.js";
+import { batchCandidates, buildPromptText, promptBytes, totalPromptBytes } from "./prompt.js";
 import { runCaptured } from "./process.js";
+
+export { batchCandidates, fixedPromptBytes, promptBytes, totalPromptBytes } from "./prompt.js";
 
 const schema = {
   type: "object",
@@ -42,6 +45,27 @@ export async function rankCandidates(
   candidates: readonly Candidate[],
   config: Config,
 ): Promise<string> {
+  const batches = batchCandidates(condition, candidates, config.promptMaxBytes);
+  const totalBytes = totalPromptBytes(condition, batches);
+  if (totalBytes > config.totalPromptMaxBytes) {
+    throw new Error(
+      `keep input is ${totalBytes} bytes, above RGK_TOTAL_PROMPT_MAX_BYTES=${config.totalPromptMaxBytes}. Narrow the rg query or raise RGK_TOTAL_PROMPT_MAX_BYTES.`,
+    );
+  }
+
+  const rankedByBatch = await mapConcurrent(batches, config.codexConcurrency, (batch, signal) =>
+    rankCandidateBatch(condition, batch, config, signal),
+  );
+
+  return rankedByBatch.filter((rankedIds) => rankedIds !== "").join(" ");
+}
+
+async function rankCandidateBatch(
+  condition: string,
+  candidates: readonly Candidate[],
+  config: Config,
+  signal: AbortSignal,
+): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "rgk-"));
   const outputPath = join(directory, "out.json");
 
@@ -74,7 +98,7 @@ export async function rankCandidates(
         "never",
         "-",
       ],
-      { input: prompt, timeoutMs: config.timeoutMs },
+      { input: prompt, timeoutMs: config.timeoutMs, signal },
     );
 
     if (config.debug && result.stderr !== "") {
@@ -92,7 +116,7 @@ export async function rankCandidates(
     }
 
     const rawOutput = await readFile(outputPath, "utf8").catch(() => result.stdout);
-    return parseRankedIds(rawOutput);
+    return keepBatchRankedIds(parseRankedIds(rawOutput), candidates);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -115,15 +139,75 @@ export function buildPrompt(
   candidates: readonly Candidate[],
   maxBytes = 400_000,
 ): string {
-  const prompt = `Condition:\n${condition}\n\nCandidates:\n${candidates.map((candidate) => candidate.promptLine).join("\n")}\n`;
-  const bytes = Buffer.byteLength(prompt, "utf8");
+  const prompt = buildPromptText(condition, candidates);
+  const bytes = promptBytes(condition, candidates);
   if (bytes > maxBytes) {
     throw new Error(
-      `keep prompt is ${bytes} bytes, above RGK_PROMPT_MAX_BYTES=${maxBytes}. Narrow the rg query, lower RGK_KEEP_LIMIT, or raise RGK_PROMPT_MAX_BYTES.`,
+      `keep prompt is ${bytes} bytes, above RGK_PROMPT_MAX_BYTES=${maxBytes}. Narrow the rg query, lower RGK_PROMPT_LINE_MAX_BYTES, or raise RGK_PROMPT_MAX_BYTES.`,
     );
   }
 
   return prompt;
+}
+
+async function mapConcurrent<T, U>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T, signal: AbortSignal) => Promise<U>,
+): Promise<readonly U[]> {
+  const controller = new AbortController();
+  const results = Array.from<U | undefined>({ length: items.length });
+  let nextIndex = 0;
+  let firstError: unknown;
+
+  function worker(): Promise<void> {
+    if (controller.signal.aborted || nextIndex >= items.length) {
+      return Promise.resolve();
+    }
+
+    const index = nextIndex;
+    nextIndex += 1;
+    const item = items[index];
+    if (item === undefined) {
+      return worker();
+    }
+
+    return fn(item, controller.signal).then(
+      (result) => {
+        results[index] = result;
+        return worker();
+      },
+      (error: unknown) => {
+        firstError ??= error;
+        controller.abort();
+      },
+    );
+  }
+
+  await Promise.allSettled(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
+  );
+
+  if (firstError !== undefined) {
+    throw firstError;
+  }
+
+  return results.map((result) => {
+    if (result === undefined) {
+      throw new Error("concurrent codex ranking did not produce a result");
+    }
+
+    return result;
+  });
+}
+
+function keepBatchRankedIds(rankedIds: string, candidates: readonly Candidate[]): string {
+  const batchIds = new Set(candidates.map((candidate) => candidate.id));
+  return rankedIds
+    .trim()
+    .split(/\s+/u)
+    .filter((id) => batchIds.has(id))
+    .join(" ");
 }
 
 function parseRankedIds(rawOutput: string): string {

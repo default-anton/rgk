@@ -78,7 +78,11 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
     rgResult = await runRgCandidates(
       config.rgPath,
       withKeepRgFlags(parsed.rgArgs),
-      config.keepLimit,
+      {
+        condition: parsed.keep,
+        perRequestMaxBytes: config.promptMaxBytes,
+        totalMaxBytes: config.totalPromptMaxBytes,
+      },
       {
         promptLineMaxBytes: config.promptLineMaxBytes,
         outputLineMaxBytes: config.outputLineMaxBytes,
@@ -93,10 +97,12 @@ export async function main(argv: readonly string[], env: NodeJS.ProcessEnv): Pro
     writeStderr(rgResult.stderr);
   }
 
-  if (rgResult.limitExceeded) {
-    writeStderr(
-      `rgk: more than ${config.keepLimit} candidates matched. Narrow the rg query or increase RGK_KEEP_LIMIT.\n`,
-    );
+  if (rgResult.promptBudgetExceeded !== null) {
+    const message =
+      rgResult.promptBudgetExceeded === "request"
+        ? `rgk: a keep candidate is above RGK_PROMPT_MAX_BYTES=${config.promptMaxBytes}. Lower RGK_PROMPT_LINE_MAX_BYTES or raise RGK_PROMPT_MAX_BYTES.\n`
+        : `rgk: keep input is above RGK_TOTAL_PROMPT_MAX_BYTES=${config.totalPromptMaxBytes}. Narrow the rg query or raise RGK_TOTAL_PROMPT_MAX_BYTES.\n`;
+    writeStderr(message);
     return 2;
   }
 
@@ -340,10 +346,11 @@ Wrapper option:
 Environment:
   RGK_MODEL                   Codex model (default: gpt-5.4-mini)
   RGK_REASONING_EFFORT        Codex reasoning effort (default: medium)
-  RGK_KEEP_LIMIT              Max candidates sent to Codex (default: 300)
-  RGK_PROMPT_MAX_BYTES        Max prompt bytes sent to Codex (default: 400000)
+  RGK_PROMPT_MAX_BYTES        Max prompt bytes per Codex request (default: 400000)
+  RGK_TOTAL_PROMPT_MAX_BYTES  Max total keep prompt bytes processed (default: 4000000)
   RGK_PROMPT_LINE_MAX_BYTES   Max matched-line bytes sent per candidate (default: 600, min: 4)
   RGK_OUTPUT_LINE_MAX_BYTES   Max matched-line bytes printed per result (default: 300, min: 4)
+  RGK_CODEX_CONCURRENCY       Max concurrent Codex requests (default: 4)
   RGK_DEBUG                   Print Codex diagnostics when set to 1 or true
 
 Use rg --help for ripgrep options. Use --rgk-help or --rgk-version for wrapper-only output.

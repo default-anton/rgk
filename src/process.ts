@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { parseRgJsonLine, type Candidate, type CandidatePresentation } from "./candidates.js";
+import { createPromptBudgetTracker, type PromptBudgetFailure } from "./prompt.js";
 
 export type ProcessResult = {
   readonly code: number;
@@ -12,7 +13,13 @@ export type RgCandidatesResult = {
   readonly code: number;
   readonly stderr: string;
   readonly candidates: readonly Candidate[];
-  readonly limitExceeded: boolean;
+  readonly promptBudgetExceeded: PromptBudgetFailure | null;
+};
+
+export type RgCandidateBudget = {
+  readonly condition: string;
+  readonly perRequestMaxBytes: number;
+  readonly totalMaxBytes: number;
 };
 
 export function runCaptured(
@@ -22,6 +29,7 @@ export function runCaptured(
     readonly input?: string;
     readonly timeoutMs?: number;
     readonly inheritStdin?: boolean;
+    readonly signal?: AbortSignal;
   } = {},
 ): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
@@ -41,6 +49,17 @@ export function runCaptured(
         timedOut = true;
       },
     );
+
+    let abortKillTimeout: NodeJS.Timeout | undefined;
+    const abort = () => {
+      child.kill("SIGTERM");
+      abortKillTimeout = setTimeout(() => child.kill("SIGKILL"), 1_000);
+      abortKillTimeout.unref();
+    };
+    if (options.signal?.aborted === true) {
+      abort();
+    }
+    options.signal?.addEventListener("abort", abort, { once: true });
 
     const stdoutStream = child.stdout;
     const stderrStream = child.stderr;
@@ -62,6 +81,8 @@ export function runCaptured(
     child.on("error", (error) => {
       settled = true;
       clearProcessTimeout(timeout);
+      clearProcessTimeout(abortKillTimeout);
+      options.signal?.removeEventListener("abort", abort);
       reject(error);
     });
     child.on("exit", () => {
@@ -69,6 +90,8 @@ export function runCaptured(
     });
     child.on("close", (code, signal) => {
       clearProcessTimeout(timeout);
+      clearProcessTimeout(abortKillTimeout);
+      options.signal?.removeEventListener("abort", abort);
       resolve({ code: code ?? signalToCode(signal), stdout, stderr, timedOut });
     });
 
@@ -96,7 +119,7 @@ export function runCaptured(
 export function runRgCandidates(
   command: string,
   args: readonly string[],
-  keepLimit: number,
+  budget: RgCandidateBudget,
   presentation: CandidatePresentation,
 ): Promise<RgCandidatesResult> {
   return new Promise((resolve, reject) => {
@@ -105,7 +128,11 @@ export function runRgCandidates(
     let stderr = "";
     let pending = "";
     let nextId = 1;
-    let limitExceeded = false;
+    let promptBudgetExceeded: PromptBudgetFailure | null = null;
+    const promptBudget = createPromptBudgetTracker(budget.condition, {
+      perRequestMaxBytes: budget.perRequestMaxBytes,
+      totalMaxBytes: budget.totalMaxBytes,
+    });
 
     const stdoutStream = child.stdout;
     const stderrStream = child.stderr;
@@ -115,6 +142,22 @@ export function runRgCandidates(
       return;
     }
 
+    const addCandidates = (lineCandidates: readonly Candidate[]): boolean => {
+      for (const candidate of lineCandidates) {
+        const budgetResult = promptBudget.add(candidate);
+        if (!budgetResult.ok) {
+          promptBudgetExceeded = budgetResult.reason;
+          child.kill("SIGTERM");
+          return false;
+        }
+
+        candidates.push(candidate);
+        nextId += 1;
+      }
+
+      return true;
+    };
+
     stdoutStream.setEncoding("utf8");
     stderrStream.setEncoding("utf8");
     stdoutStream.on("data", (chunk: string) => {
@@ -123,16 +166,14 @@ export function runRgCandidates(
       while (newlineIndex !== -1) {
         const line = pending.slice(0, newlineIndex);
         pending = pending.slice(newlineIndex + 1);
-        const remainingCandidates = keepLimit + 1 - candidates.length;
-        const lineCandidates = parseRgJsonLine(line, nextId, remainingCandidates, presentation);
-        if (lineCandidates.length > 0) {
-          candidates.push(...lineCandidates);
-          nextId += lineCandidates.length;
-          if (candidates.length > keepLimit) {
-            limitExceeded = true;
-            child.kill("SIGTERM");
-            return;
-          }
+        const lineCandidates = parseRgJsonLine(
+          line,
+          nextId,
+          Number.POSITIVE_INFINITY,
+          presentation,
+        );
+        if (!addCandidates(lineCandidates)) {
+          return;
         }
         newlineIndex = pending.indexOf("\n");
       }
@@ -142,20 +183,21 @@ export function runRgCandidates(
     });
     child.on("error", reject);
     child.on("close", (code, signal) => {
-      if (!limitExceeded && pending !== "") {
-        const remainingCandidates = keepLimit + 1 - candidates.length;
-        const lineCandidates = parseRgJsonLine(pending, nextId, remainingCandidates, presentation);
-        if (lineCandidates.length > 0) {
-          candidates.push(...lineCandidates);
-          limitExceeded = candidates.length > keepLimit;
-        }
+      if (promptBudgetExceeded === null && pending !== "") {
+        const lineCandidates = parseRgJsonLine(
+          pending,
+          nextId,
+          Number.POSITIVE_INFINITY,
+          presentation,
+        );
+        addCandidates(lineCandidates);
       }
 
       resolve({
-        code: limitExceeded ? 0 : (code ?? signalToCode(signal)),
+        code: promptBudgetExceeded === null ? (code ?? signalToCode(signal)) : 0,
         stderr,
         candidates,
-        limitExceeded,
+        promptBudgetExceeded,
       });
     });
   });

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { parseArgs, UsageError } from "../dist/args.js";
 import { orderCandidates, parseRgJson, parseRgJsonLine } from "../dist/candidates.js";
 import { firstKeepIncompatibleRgFlag, withKeepRgFlags } from "../dist/cli.js";
-import { buildPrompt } from "../dist/codex.js";
+import { batchCandidates, buildPrompt, promptBytes, totalPromptBytes } from "../dist/codex.js";
 import { loadKeepConfig, loadRgPath } from "../dist/config.js";
 
 test("parseArgs passes through normal rg args", () => {
@@ -263,6 +263,25 @@ test("buildPrompt rejects prompts above the configured byte limit", () => {
   );
 });
 
+test("batchCandidates splits candidates by prompt byte limit", () => {
+  const candidates = [
+    { id: "m1", output: "a", promptLine: "m1 a" },
+    { id: "m2", output: "b", promptLine: "m2 b" },
+    { id: "m3", output: "c", promptLine: "m3 c" },
+  ];
+  const batches = batchCandidates("auth failures", candidates, 48);
+
+  assert.deepEqual(
+    batches.map((batch) => batch.map((candidate) => candidate.id)),
+    [["m1", "m2"], ["m3"]],
+  );
+  assert.equal(
+    totalPromptBytes("auth failures", batches),
+    promptBytes("auth failures", candidates.slice(0, 2)) +
+      promptBytes("auth failures", candidates.slice(2)),
+  );
+});
+
 test("withKeepRgFlags inserts forced flags before option terminator", () => {
   assert.deepEqual(withKeepRgFlags(["foo", "src"]), ["foo", "src", "--json", "--color=never"]);
   assert.deepEqual(withKeepRgFlags(["-foo", "--", "file.txt"]), [
@@ -289,13 +308,17 @@ test("firstKeepIncompatibleRgFlag detects rg output modes that bypass JSON", () 
   assert.equal(firstKeepIncompatibleRgFlag(["foo", "--", "-l"]), null);
 });
 
-test("loadKeepConfig reads line budget environment", () => {
+test("loadKeepConfig reads keep budget environment", () => {
   const config = loadKeepConfig({
     RGK_PROMPT_LINE_MAX_BYTES: "120",
     RGK_OUTPUT_LINE_MAX_BYTES: "80",
+    RGK_TOTAL_PROMPT_MAX_BYTES: "900000",
+    RGK_CODEX_CONCURRENCY: "2",
   });
   assert.equal(config.promptLineMaxBytes, 120);
   assert.equal(config.outputLineMaxBytes, 80);
+  assert.equal(config.totalPromptMaxBytes, 900_000);
+  assert.equal(config.codexConcurrency, 2);
 });
 
 test("loadKeepConfig rejects line budgets too small to be useful", () => {
@@ -306,5 +329,5 @@ test("loadKeepConfig rejects line budgets too small to be useful", () => {
 });
 
 test("loadRgPath does not validate keep-only environment", () => {
-  assert.equal(loadRgPath({ RGK_KEEP_LIMIT: "bad", RGK_RG_PATH: "custom-rg" }), "custom-rg");
+  assert.equal(loadRgPath({ RGK_PROMPT_MAX_BYTES: "bad", RGK_RG_PATH: "custom-rg" }), "custom-rg");
 });
