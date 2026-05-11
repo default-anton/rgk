@@ -17,6 +17,20 @@ All notable changes to `rgk` are documented here.
 
 ### Changed
 
+- None.
+
+### Fixed
+
+- None.
+
+## [0.2.1] - 2026-05-10
+
+### Added
+
+- None.
+
+### Changed
+
 - Changed the default Codex reasoning effort to `none`.
 
 ### Fixed
